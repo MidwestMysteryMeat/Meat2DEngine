@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     Meat2DEngine
-    VERSION 0.1.0
+    VERSION 0.4.0
     DESCRIPTION "Deterministic simulation-first 2D engine"
     LANGUAGES CXX
 )
@@ -16,6 +16,7 @@ option(MEAT2D_BUILD_REMOTE_CLIENT "Build the headless multiplayer client" ON)
 option(MEAT2D_BUILD_DIRECTORY "Build the self-hostable public server directory" ON)
 option(MEAT2D_BUILD_CLI "Build the project-management command-line tool" ON)
 option(MEAT2D_BUILD_LAUNCHER "Build the graphical project editor and launcher" ON)
+option(MEAT2D_BUILD_EXAMPLES "Build the example games" ON)
 option(MEAT2D_BUILD_TESTS "Build unit and determinism tests" ON)
 option(MEAT2D_BUILD_BENCHMARKS "Build simulation benchmarks" ON)
 option(MEAT2D_ENABLE_INSTALL "Enable SDK/runtime installation and CPack" ON)
@@ -186,7 +187,7 @@ else()
     endif()
 endif()
 
-if(MEAT2D_BUILD_CLIENT OR MEAT2D_BUILD_LAUNCHER)
+if(MEAT2D_BUILD_CLIENT OR MEAT2D_BUILD_LAUNCHER OR MEAT2D_BUILD_EXAMPLES)
     include(FetchContent)
 
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -210,6 +211,13 @@ if(MEAT2D_BUILD_CLIENT)
     target_compile_features(meat2d_sandbox PRIVATE cxx_std_20)
     target_link_libraries(meat2d_sandbox PRIVATE Meat2D::Net Meat2D::Render SDL3::SDL3)
     list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_sandbox)
+endif()
+
+if(MEAT2D_BUILD_EXAMPLES)
+    add_executable(meat2d_example_deep_dig examples/deep_dig/main.cpp)
+    target_compile_features(meat2d_example_deep_dig PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_example_deep_dig PRIVATE Meat2D::Core Meat2D::Render SDL3::SDL3)
+    list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_example_deep_dig)
 endif()
 
 if(MEAT2D_BUILD_LAUNCHER)

@@ -181,6 +181,7 @@ set(MEAT2D_BUILD_DIRECTORY OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(MEAT2D_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     Meat2D
@@ -190,6 +191,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Meat2D)
 
 target_link_libraries(your_game PRIVATE Meat2D::Core) # simulation only
+# target_link_libraries(your_game PRIVATE Meat2D::Render) # WorldView dirty-region rasterization
 # target_link_libraries(your_game PRIVATE Meat2D::Net) # simulation + networking
 ```
 
@@ -230,11 +232,15 @@ apps/
 benchmarks/      simulation throughput checks
 cmake/           installed-package configuration
 docs/            architecture and roadmap
+examples/        deep_dig, a complete example game built on the public API
 include/meat2d/  public engine API
 src/             engine implementation
 templates/       side-view and top-down game starters
 tests/           unit and determinism tests
 ```
+
+Tagged releases (`vX.Y.Z`) publish prebuilt Windows and Linux SDK archives
+(headers, libraries, and CMake package config) as GitHub release assets.
 
 See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
 [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and

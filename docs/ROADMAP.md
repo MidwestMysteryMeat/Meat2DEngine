@@ -49,7 +49,7 @@
 - [x] Editor-hosted local sessions and direct/LAN/public one-click joins
 - [x] Windows/Linux client and headless-server bundle definitions
 - [x] Reusable GitHub Actions build/release workflow
-- [ ] Tagged SDK archives and example game
+- [x] Tagged SDK archives and example game
 
 ## Later
 
