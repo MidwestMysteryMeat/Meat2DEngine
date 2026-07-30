@@ -29,6 +29,8 @@ struct Options {
     std::string map_name{"Elements Lab"};
     std::string directory_host;
     std::string persist_directory;
+    std::size_t parallel_workers{};
+    bool parallel{};
     bool ticks_explicit{};
     bool listen{};
     bool realtime{true};
@@ -76,6 +78,15 @@ Options parse_options(int argc, char** argv) {
             parse_integer(argv[++index], options.directory_port);
         } else if (argument == "--persist" && index + 1 < argc) {
             options.persist_directory = argv[++index];
+        } else if (argument == "--parallel") {
+            options.parallel = true;
+            if (index + 1 < argc) {
+                std::size_t requested = 0;
+                if (parse_integer(argv[index + 1], requested)) {
+                    options.parallel_workers = requested;
+                    ++index;
+                }
+            }
         }
     }
     if (options.listen && !options.ticks_explicit) {
@@ -113,13 +124,15 @@ int run_benchmark(const Options& options) {
     std::uint64_t total_moves = 0;
     const auto start = std::chrono::steady_clock::now();
     for (std::uint64_t index = 0; index < options.ticks; ++index) {
-        total_moves += world.step().moved_cells;
+        total_moves += options.parallel ? world.step_parallel(options.parallel_workers).moved_cells
+                                        : world.step().moved_cells;
     }
     const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
 
     std::cout << "Meat2D headless simulation " << meat2d::version_string << '\n'
               << "protocol=" << meat2d::net::protocol_version
-              << " max_players=" << static_cast<int>(meat2d::net::maximum_players) << '\n'
+              << " max_players=" << static_cast<int>(meat2d::net::maximum_players)
+              << " scheduler=" << (options.parallel ? "step_parallel" : "step") << '\n'
               << "ticks=" << world.current_tick() << " moves=" << total_moves
               << " elapsed_ms=" << std::fixed << std::setprecision(2) << elapsed.count() * 1000.0
               << '\n'

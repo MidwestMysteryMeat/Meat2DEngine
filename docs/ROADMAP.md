@@ -53,7 +53,8 @@
 
 ## Later
 
-- Parallel deterministic chunk scheduling
+- [x] Parallel deterministic chunk scheduling — `World::step_parallel` (4-phase
+      chunk grouping, persistent worker pool) + `meat2d_server --parallel`
 - [x] Persistent world chunk storage — `ChunkStore` + `meat2d_server --persist`
       (fixed-size worlds only; see ARCHITECTURE.md's Chunk persistence scope note)
 - Unbounded/streamed world addressing — the larger follow-up ChunkStore's
