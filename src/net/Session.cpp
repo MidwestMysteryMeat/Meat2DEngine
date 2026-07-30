@@ -784,6 +784,10 @@ const World* AuthoritativeClient::replicated_world() const noexcept {
     return replicated_world_.get();
 }
 
+World* AuthoritativeClient::replicated_world() noexcept {
+    return replicated_world_.get();
+}
+
 std::string_view AuthoritativeClient::last_error() const noexcept {
     return last_error_;
 }

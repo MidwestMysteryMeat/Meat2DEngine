@@ -49,10 +49,12 @@ class World {
 
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
     void rasterize_rgba(std::span<std::uint8_t> destination) const;
+    void rasterize_rgba_region(RectI region, std::span<std::uint8_t> destination) const;
 
     [[nodiscard]] std::int32_t chunk_columns() const noexcept;
     [[nodiscard]] std::int32_t chunk_rows() const noexcept;
     [[nodiscard]] std::span<const Chunk> chunks() const noexcept;
+    [[nodiscard]] RectI chunk_dirty_rect(std::int32_t column, std::int32_t row) const noexcept;
 
   private:
     [[nodiscard]] std::size_t chunk_index(Vec2i position) const noexcept;

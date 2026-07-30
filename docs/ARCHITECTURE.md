@@ -140,13 +140,19 @@ See [AI_AND_LIFE.md](AI_AND_LIFE.md).
 
 ## Rendering
 
-The first renderer writes the world to an RGBA streaming texture and lets SDL3
+The renderer writes the world to an RGBA streaming texture and lets SDL3
 scale it with nearest-neighbor sampling. This is intentionally simple and keeps
 simulation work measurable.
 
-The living lab overlays cellular organisms and embodied agents after the
-material raster. Later rendering can upload only dirty chunk regions and add
-sprite/entity passes without changing the cell-state API.
+Uploads are dirty-region driven. Chunks accumulate local dirty bounds until a
+renderer consumes them: each frame the living lab rasterizes and uploads only
+`chunk_dirty_rect` regions (plus chunks covered by organism/agent overlays on
+the previous or current frame), then calls `clear_dirty` on the displayed
+world. The same path serves the local simulation and the replicated
+multiplayer world, whose cells are marked dirty as chunk deltas apply. A full
+upload happens only on the first frame, world switches, resets, and texture
+recreation. Later rendering can add sprite/entity passes without changing the
+cell-state API.
 
 ## Packaging
 

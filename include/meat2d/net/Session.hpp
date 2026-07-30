@@ -168,6 +168,7 @@ class AuthoritativeClient {
     [[nodiscard]] const std::optional<WelcomeMessage>& welcome() const noexcept;
     [[nodiscard]] const std::optional<SnapshotMessage>& latest_snapshot() const noexcept;
     [[nodiscard]] const World* replicated_world() const noexcept;
+    [[nodiscard]] World* replicated_world() noexcept;
     [[nodiscard]] std::string_view last_error() const noexcept;
 
   private:

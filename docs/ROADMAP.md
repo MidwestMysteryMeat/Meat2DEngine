@@ -12,7 +12,7 @@
 - [x] Tests and baseline benchmark
 - [x] Initial install/CPack support
 - [x] Expanded element and reaction set
-- [ ] Dirty-region texture uploads
+- [x] Dirty-region texture uploads
 
 ## 0.2 — living laboratory
 

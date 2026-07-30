@@ -26,6 +26,8 @@ project editor, starter games, and one-command packaging.
   fitness, motility, digestion, reproduction, and mutation
 - Seeded traversal that avoids a permanent left/right bias
 - Interactive SDL3 elements laboratory with the complete paintable catalog
+- Dirty-region rasterization and partial texture uploads driven by per-chunk
+  dirty bounds, in both local and replicated views
 - Headless simulation/server target
 - State hashing, unit tests, cross-chunk tests, and a benchmark
 - Nonblocking UDP client/server sessions for two to eight players on Windows

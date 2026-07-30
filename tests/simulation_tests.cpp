@@ -1351,6 +1351,55 @@ void test_chunks_sleep() {
     check(stats.sleeping_chunks == 4, "unexpected sleeping chunk count");
 }
 
+void test_dirty_region_rasterization() {
+    meat2d::World world({
+        .width = 96,
+        .height = 96,
+        .seed = 77,
+        .sleep_after_ticks = 30,
+    });
+    world.paint_disc({40, 8}, 6, meat2d::MaterialId::Sand);
+    world.paint_disc({70, 8}, 5, meat2d::MaterialId::Water);
+
+    const auto pixel_count = 96U * 96U * 4U;
+    std::vector<std::uint8_t> full(pixel_count);
+    std::vector<std::uint8_t> partial(pixel_count);
+    world.rasterize_rgba(full);
+    world.rasterize_rgba_region({0, 0, 96, 96}, partial);
+    check(full == partial, "full-world region rasterization diverged from rasterize_rgba");
+
+    world.rasterize_rgba(partial);
+    world.clear_dirty();
+    bool any_dirty = false;
+    for (std::int32_t row = 0; row < world.chunk_rows(); ++row) {
+        for (std::int32_t column = 0; column < world.chunk_columns(); ++column) {
+            any_dirty = any_dirty || !world.chunk_dirty_rect(column, row).empty();
+        }
+    }
+    check(!any_dirty, "clear_dirty left a non-empty chunk dirty rect");
+
+    for (int tick = 0; tick < 24; ++tick) {
+        world.step();
+    }
+    bool found_dirty = false;
+    for (std::int32_t row = 0; row < world.chunk_rows(); ++row) {
+        for (std::int32_t column = 0; column < world.chunk_columns(); ++column) {
+            const auto region = world.chunk_dirty_rect(column, row);
+            if (region.empty()) {
+                continue;
+            }
+            found_dirty = true;
+            check(region.x >= 0 && region.y >= 0 && region.x + region.width <= 96 &&
+                      region.y + region.height <= 96,
+                  "chunk dirty rect escaped the world bounds");
+            world.rasterize_rgba_region(region, partial);
+        }
+    }
+    check(found_dirty, "falling material produced no dirty regions");
+    world.rasterize_rgba(full);
+    check(full == partial, "dirty-region refresh did not reproduce the full rasterization");
+}
+
 void test_raster_output() {
     meat2d::World world({
         .width = 8,
@@ -1398,6 +1447,7 @@ int main() {
         test_cross_chunk_motion();
         test_determinism();
         test_chunks_sleep();
+        test_dirty_region_rasterization();
         test_raster_output();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';

@@ -53,6 +53,21 @@ std::uint8_t shade(std::uint8_t channel, int delta) noexcept {
     return static_cast<std::uint8_t>(std::clamp(static_cast<int>(channel) + delta, 0, 255));
 }
 
+Rgba8 cell_rgba(const Cell& value) noexcept {
+    auto color = material_definition(value.material).color;
+    if (value.material != MaterialId::Empty) {
+        const int variation = static_cast<int>(value.variant) - 8;
+        color.r = shade(color.r, variation);
+        color.g = shade(color.g, variation);
+        color.b = shade(color.b, variation);
+    }
+    if (value.material == MaterialId::Metal && value.state > 0) {
+        color.b = shade(color.b, 70);
+        color.g = shade(color.g, 30);
+    }
+    return color;
+}
+
 } // namespace
 
 World::World(WorldConfig config) : config_(config) {
@@ -244,27 +259,26 @@ std::uint64_t World::state_hash() const noexcept {
 }
 
 void World::rasterize_rgba(std::span<std::uint8_t> destination) const {
+    rasterize_rgba_region({0, 0, config_.width, config_.height}, destination);
+}
+
+void World::rasterize_rgba_region(RectI region, std::span<std::uint8_t> destination) const {
     const auto required =
         static_cast<std::size_t>(config_.width) * static_cast<std::size_t>(config_.height) * 4U;
     if (destination.size() < required) {
         throw std::invalid_argument("RGBA destination is smaller than the world");
     }
 
-    std::size_t output = 0;
-    for (std::int32_t y = 0; y < config_.height; ++y) {
-        for (std::int32_t x = 0; x < config_.width; ++x) {
-            const auto& value = cell_unchecked({x, y});
-            auto color = material_definition(value.material).color;
-            if (value.material != MaterialId::Empty) {
-                const int variation = static_cast<int>(value.variant) - 8;
-                color.r = shade(color.r, variation);
-                color.g = shade(color.g, variation);
-                color.b = shade(color.b, variation);
-            }
-            if (value.material == MaterialId::Metal && value.state > 0) {
-                color.b = shade(color.b, 70);
-                color.g = shade(color.g, 30);
-            }
+    const auto begin_x = std::max<std::int32_t>(region.x, 0);
+    const auto begin_y = std::max<std::int32_t>(region.y, 0);
+    const auto end_x = std::min<std::int32_t>(region.x + region.width, config_.width);
+    const auto end_y = std::min<std::int32_t>(region.y + region.height, config_.height);
+    for (std::int32_t y = begin_y; y < end_y; ++y) {
+        auto output = (static_cast<std::size_t>(y) * static_cast<std::size_t>(config_.width) +
+                       static_cast<std::size_t>(begin_x)) *
+                      4U;
+        for (std::int32_t x = begin_x; x < end_x; ++x) {
+            const auto color = cell_rgba(cell_unchecked({x, y}));
             destination[output++] = color.r;
             destination[output++] = color.g;
             destination[output++] = color.b;
@@ -283,6 +297,26 @@ std::int32_t World::chunk_rows() const noexcept {
 
 std::span<const Chunk> World::chunks() const noexcept {
     return chunks_;
+}
+
+RectI World::chunk_dirty_rect(std::int32_t column, std::int32_t row) const noexcept {
+    if (column < 0 || row < 0 || column >= chunk_columns_ || row >= chunk_rows_) {
+        return {};
+    }
+    const auto& bounds = chunks_[static_cast<std::size_t>(row * chunk_columns_ + column)].dirty;
+    if (bounds.empty()) {
+        return {};
+    }
+    const auto begin_x = column * chunk_size + static_cast<std::int32_t>(bounds.min_x);
+    const auto begin_y = row * chunk_size + static_cast<std::int32_t>(bounds.min_y);
+    const auto end_x = std::min(column * chunk_size + static_cast<std::int32_t>(bounds.max_x) + 1,
+                                config_.width);
+    const auto end_y =
+        std::min(row * chunk_size + static_cast<std::int32_t>(bounds.max_y) + 1, config_.height);
+    if (begin_x >= end_x || begin_y >= end_y) {
+        return {};
+    }
+    return {begin_x, begin_y, end_x - begin_x, end_y - begin_y};
 }
 
 std::size_t World::chunk_index(Vec2i position) const noexcept {

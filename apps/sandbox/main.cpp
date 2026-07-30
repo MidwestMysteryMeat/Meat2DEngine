@@ -157,13 +157,13 @@ meat2d::Rgba8 agent_color(meat2d::ai::AgentKind kind) {
 }
 
 void rasterize_agents(const meat2d::ai::LivingSimulation& simulation,
-                      std::vector<std::uint8_t>& pixels) {
+                      std::vector<std::uint8_t>& pixels, meat2d::RectI clip) {
     const auto& world = simulation.world();
     for (const auto& agent : simulation.agents()) {
         const auto color = agent_color(agent.kind);
         for (std::int32_t y = agent.position.y - 1; y <= agent.position.y + 1; ++y) {
             for (std::int32_t x = agent.position.x - 1; x <= agent.position.x + 1; ++x) {
-                if (!world.in_bounds({x, y})) {
+                if (!world.in_bounds({x, y}) || !clip.contains({x, y})) {
                     continue;
                 }
                 const auto offset =
@@ -180,11 +180,15 @@ void rasterize_agents(const meat2d::ai::LivingSimulation& simulation,
 }
 
 void rasterize_organisms(const meat2d::ai::LivingSimulation& simulation,
-                         std::vector<std::uint8_t>& pixels) {
+                         std::vector<std::uint8_t>& pixels, meat2d::RectI clip) {
     const auto& field = simulation.organisms();
     const auto cells = field.cells();
-    for (std::int32_t y = 0; y < field.height(); ++y) {
-        for (std::int32_t x = 0; x < field.width(); ++x) {
+    const auto begin_x = std::max<std::int32_t>(clip.x, 0);
+    const auto begin_y = std::max<std::int32_t>(clip.y, 0);
+    const auto end_x = std::min<std::int32_t>(clip.x + clip.width, field.width());
+    const auto end_y = std::min<std::int32_t>(clip.y + clip.height, field.height());
+    for (std::int32_t y = begin_y; y < end_y; ++y) {
+        for (std::int32_t x = begin_x; x < end_x; ++x) {
             const auto index =
                 static_cast<std::size_t>(y) * static_cast<std::size_t>(field.width()) +
                 static_cast<std::size_t>(x);
@@ -200,6 +204,49 @@ void rasterize_organisms(const meat2d::ai::LivingSimulation& simulation,
                 static_cast<std::uint8_t>((static_cast<int>(pixels[pixel + 1U]) + color.g * 2) / 3);
             pixels[pixel + 2U] =
                 static_cast<std::uint8_t>((static_cast<int>(pixels[pixel + 2U]) + color.b * 2) / 3);
+        }
+    }
+}
+
+meat2d::RectI chunk_world_rect(const meat2d::World& world, std::int32_t column, std::int32_t row) {
+    const auto x = column * meat2d::chunk_size;
+    const auto y = row * meat2d::chunk_size;
+    return {
+        x,
+        y,
+        std::min(meat2d::chunk_size, world.width() - x),
+        std::min(meat2d::chunk_size, world.height() - y),
+    };
+}
+
+void mark_overlay_chunks(const meat2d::ai::LivingSimulation& simulation,
+                         std::vector<std::uint8_t>& overlay) {
+    const auto& world = simulation.world();
+    const auto columns = world.chunk_columns();
+    const auto mark = [&](std::int32_t x, std::int32_t y) {
+        if (x < 0 || y < 0 || x >= world.width() || y >= world.height()) {
+            return;
+        }
+        overlay[static_cast<std::size_t>((y / meat2d::chunk_size) * columns +
+                                         x / meat2d::chunk_size)] = 1U;
+    };
+    for (const auto& agent : simulation.agents()) {
+        for (std::int32_t y = agent.position.y - 1; y <= agent.position.y + 1; ++y) {
+            for (std::int32_t x = agent.position.x - 1; x <= agent.position.x + 1; ++x) {
+                mark(x, y);
+            }
+        }
+    }
+    const auto& field = simulation.organisms();
+    const auto cells = field.cells();
+    for (std::int32_t y = 0; y < field.height(); ++y) {
+        for (std::int32_t x = 0; x < field.width(); ++x) {
+            const auto index =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(field.width()) +
+                static_cast<std::size_t>(x);
+            if (cells[index].genome != 0U) {
+                mark(x, y);
+            }
         }
     }
 }
@@ -296,6 +343,11 @@ int main(int argc, char** argv) {
     bool running = true;
     bool paused = false;
     bool single_step = false;
+    bool full_upload_needed = true;
+    const meat2d::World* last_displayed_world = nullptr;
+    std::vector<std::uint8_t> overlay_now;
+    std::vector<std::uint8_t> overlay_prev;
+    std::uint32_t uploaded_regions = 0;
     int brush_radius = 5;
     meat2d::MaterialId brush = meat2d::MaterialId::Sand;
     std::uint32_t organism_brush = meat2d::life::photosynthetic_genome;
@@ -373,12 +425,14 @@ int main(int argc, char** argv) {
                     if (!remote_mode) {
                         simulation = meat2d::ai::LivingSimulation(world_config);
                         seed_living_lab(simulation);
+                        full_upload_needed = true;
                     }
                     break;
                 case SDLK_C:
                     if (!remote_mode) {
                         simulation = meat2d::ai::LivingSimulation(world_config);
                         simulation.world().wake_all();
+                        full_upload_needed = true;
                     }
                     break;
                 default:
@@ -442,9 +496,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        displayed_world = remote_mode && remote.replicated_world() != nullptr
-                              ? remote.replicated_world()
-                              : &simulation.world();
+        meat2d::World* live_world = remote_mode && remote.replicated_world() != nullptr
+                                        ? remote.replicated_world()
+                                        : &simulation.world();
+        displayed_world = live_world;
         if (displayed_world->width() != texture_width ||
             displayed_world->height() != texture_height) {
             SDL_DestroyTexture(texture);
@@ -459,14 +514,72 @@ int main(int argc, char** argv) {
             pixels.assign(static_cast<std::size_t>(texture_width) *
                               static_cast<std::size_t>(texture_height) * 4U,
                           0U);
+            full_upload_needed = true;
+        }
+        if (displayed_world != last_displayed_world) {
+            last_displayed_world = displayed_world;
+            full_upload_needed = true;
         }
 
-        displayed_world->rasterize_rgba(pixels);
-        if (!remote_mode) {
-            rasterize_organisms(simulation, pixels);
-            rasterize_agents(simulation, pixels);
+        const auto chunk_count = static_cast<std::size_t>(displayed_world->chunk_columns()) *
+                                 static_cast<std::size_t>(displayed_world->chunk_rows());
+        if (overlay_now.size() != chunk_count) {
+            overlay_now.assign(chunk_count, 0U);
+            overlay_prev.assign(chunk_count, 0U);
+            full_upload_needed = true;
         }
-        SDL_UpdateTexture(texture, nullptr, pixels.data(), displayed_world->width() * 4);
+        std::fill(overlay_now.begin(), overlay_now.end(), 0U);
+        if (!remote_mode) {
+            mark_overlay_chunks(simulation, overlay_now);
+        }
+
+        const auto pitch = displayed_world->width() * 4;
+        uploaded_regions = 0;
+        if (full_upload_needed) {
+            displayed_world->rasterize_rgba(pixels);
+            if (!remote_mode) {
+                const meat2d::RectI everything{0, 0, displayed_world->width(),
+                                               displayed_world->height()};
+                rasterize_organisms(simulation, pixels, everything);
+                rasterize_agents(simulation, pixels, everything);
+            }
+            SDL_UpdateTexture(texture, nullptr, pixels.data(), pitch);
+            uploaded_regions = 1;
+            full_upload_needed = false;
+        } else {
+            for (std::int32_t row = 0; row < displayed_world->chunk_rows(); ++row) {
+                for (std::int32_t column = 0; column < displayed_world->chunk_columns();
+                     ++column) {
+                    const auto chunk_index =
+                        static_cast<std::size_t>(row) *
+                            static_cast<std::size_t>(displayed_world->chunk_columns()) +
+                        static_cast<std::size_t>(column);
+                    const bool overlay_refresh =
+                        overlay_now[chunk_index] != 0U || overlay_prev[chunk_index] != 0U;
+                    const auto region = overlay_refresh
+                                            ? chunk_world_rect(*displayed_world, column, row)
+                                            : displayed_world->chunk_dirty_rect(column, row);
+                    if (region.empty()) {
+                        continue;
+                    }
+                    displayed_world->rasterize_rgba_region(region, pixels);
+                    if (!remote_mode) {
+                        rasterize_organisms(simulation, pixels, region);
+                        rasterize_agents(simulation, pixels, region);
+                    }
+                    const SDL_Rect update_rect{region.x, region.y, region.width, region.height};
+                    const auto* update_pixels =
+                        pixels.data() + (static_cast<std::size_t>(region.y) *
+                                             static_cast<std::size_t>(displayed_world->width()) +
+                                         static_cast<std::size_t>(region.x)) *
+                                            4U;
+                    SDL_UpdateTexture(texture, &update_rect, update_pixels, pitch);
+                    ++uploaded_regions;
+                }
+            }
+        }
+        live_world->clear_dirty();
+        overlay_prev = overlay_now;
         SDL_SetRenderDrawColor(renderer, 5, 7, 12, 255);
         SDL_RenderClear(renderer);
         const auto render_viewport = calculate_viewport(renderer, *displayed_world);
@@ -491,7 +604,8 @@ int main(int argc, char** argv) {
                         std::to_string(snapshot ? snapshot->server_tick : 0U) + " | agents " +
                         std::to_string(snapshot ? snapshot->agent_count : 0U) + " | organisms " +
                         std::to_string(snapshot ? snapshot->organism_population : 0U) +
-                        " | chunks " + std::to_string(last_network_stats.completed_chunks);
+                        " | chunks " + std::to_string(last_network_stats.completed_chunks) +
+                        " | uploads " + std::to_string(uploaded_regions);
             } else {
                 title = "Meat2D Living Lab | " + std::string(material_name(brush)) + " | microbe " +
                         organism_name(organism_brush) + " r=" + std::to_string(brush_radius) +
@@ -502,7 +616,8 @@ int main(int argc, char** argv) {
                         std::to_string(last_stats.world.moved_cells) + " | reacted " +
                         std::to_string(last_stats.world.reacted_cells) + " | commands " +
                         std::to_string(last_stats.applied_commands) + " | active chunks " +
-                        std::to_string(last_stats.world.active_chunks);
+                        std::to_string(last_stats.world.active_chunks) + " | uploads " +
+                        std::to_string(uploaded_regions);
             }
             SDL_SetWindowTitle(window, title.c_str());
         }
