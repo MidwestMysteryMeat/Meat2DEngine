@@ -311,8 +311,10 @@ Tagged releases (`vX.Y.Z`) publish prebuilt Windows and Linux SDK archives
 (headers, libraries, and CMake package config) as GitHub release assets.
 
 See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
-[Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
-[Roadmap](docs/ROADMAP.md). See [Project editor](docs/EDITOR.md) for the
+[Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md),
+[Roadmap](docs/ROADMAP.md), and the
+[implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap's open
+items. See [Project editor](docs/EDITOR.md) for the
 code/asset browser, sprite workflow, hosted test sessions, and one-click
 build/package tools.
 

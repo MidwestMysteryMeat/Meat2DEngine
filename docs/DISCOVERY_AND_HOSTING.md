@@ -31,6 +31,11 @@ Start a server:
 meat2d_server --listen --port 27182
 ```
 
+Add `--persist <dir>` to save/reload the world across restarts, and
+`--parallel [workers]` to multithread the simulation tick — see
+[Persistence and streaming](../README.md#persistence-and-streaming) and
+[Parallel simulation](../README.md#parallel-simulation).
+
 The hosting player can join their own process:
 
 ```bash

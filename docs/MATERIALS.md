@@ -1,6 +1,6 @@
 # Material catalog
 
-Meat2D 0.1 currently ships 25 stable material IDs. IDs are serialized and
+Meat2D currently ships 25 stable material IDs. IDs are serialized and
 replicated, so existing values are never reordered; new materials are appended
 before the `Count` sentinel.
 

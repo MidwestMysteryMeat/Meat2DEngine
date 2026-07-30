@@ -135,4 +135,8 @@ meat2d_remote --host localhost --port 27182
 ```
 
 Without `--listen`, `meat2d_server --ticks N` retains its fast deterministic
-headless benchmark mode.
+headless benchmark mode, and additionally accepts `--persist <dir>` (load a
+saved world on start, save on a clean stop — see
+[Persistence and streaming](../README.md#persistence-and-streaming)) and
+`--parallel [workers]` (use `World::step_parallel` instead of `step()` — see
+[Parallel simulation](../README.md#parallel-simulation)).
