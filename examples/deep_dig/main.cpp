@@ -11,12 +11,14 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <random>
 #include <span>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -135,6 +137,31 @@ std::int32_t chebyshev_distance(meat2d::Vec2i first, meat2d::Vec2i second) {
     return std::max(std::abs(first.x - second.x), std::abs(first.y - second.y));
 }
 
+struct LaunchOptions {
+    std::uint64_t frame_limit{};
+    std::string screenshot_path;
+};
+
+template <typename Integer> void parse_integer(std::string_view text, Integer& output) {
+    const auto result = std::from_chars(text.data(), text.data() + text.size(), output);
+    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
+        output = 0;
+    }
+}
+
+LaunchOptions parse_options(int argc, char** argv) {
+    LaunchOptions options{};
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--frames" && index + 1 < argc) {
+            parse_integer(std::string_view(argv[++index]), options.frame_limit);
+        } else if (argument == "--screenshot" && index + 1 < argc) {
+            options.screenshot_path = argv[++index];
+        }
+    }
+    return options;
+}
+
 struct RunState {
     meat2d::ai::LivingSimulation simulation;
     meat2d::Vec2i player{spawn_point};
@@ -162,7 +189,8 @@ struct RunState {
 
 } // namespace
 
-int main(int, char**) {
+int main(int argc, char** argv) {
+    const auto options = parse_options(argc, argv);
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         std::fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
         return 1;
@@ -194,6 +222,7 @@ int main(int, char**) {
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
     double accumulator = 0.0;
+    std::uint64_t rendered_frames = 0;
     while (running) {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) {
@@ -323,7 +352,24 @@ int main(int, char**) {
         } else {
             SDL_RenderDebugText(renderer, 12, 28, "WASD to move/dig. Reach the vault below the flood.");
         }
+        if (!options.screenshot_path.empty() && options.frame_limit != 0 &&
+            rendered_frames + 1 == options.frame_limit) {
+            SDL_Surface* frame = SDL_RenderReadPixels(renderer, nullptr);
+            if (frame != nullptr) {
+                if (!SDL_SavePNG(frame, options.screenshot_path.c_str())) {
+                    std::fprintf(stderr, "Screenshot save failed: %s\n", SDL_GetError());
+                }
+                SDL_DestroySurface(frame);
+            } else {
+                std::fprintf(stderr, "Screenshot capture failed: %s\n", SDL_GetError());
+            }
+        }
+
         SDL_RenderPresent(renderer);
+        ++rendered_frames;
+        if (options.frame_limit != 0 && rendered_frames >= options.frame_limit) {
+            running = false;
+        }
         SDL_Delay(1);
     }
 

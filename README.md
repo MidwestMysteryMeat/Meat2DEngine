@@ -8,6 +8,10 @@ The project is intentionally early. Its first working slice combines a
 deterministic living laboratory, authoritative multiplayer, a graphical
 project editor, starter games, and one-command packaging.
 
+| Interactive sandbox (elements lab) | `examples/deep_dig` |
+| --- | --- |
+| ![Sand, water, and steam settling in the sandbox's elements lab](docs/screenshots/sandbox_elements_lab.png) | ![Deep Dig's mineshaft, HUD, and vault chamber](docs/screenshots/deep_dig.png) |
+
 ## Current capabilities
 
 - Deterministic fixed-step cellular simulation with no floating-point values in
@@ -177,6 +181,12 @@ applied chunk is verified against the server's chunk hash.
 | `R` | Reset the laboratory |
 | `C` | Clear the world |
 | `Esc` | Quit |
+
+`meat2d_sandbox`/`meat2d_example_deep_dig --frames N --screenshot out.png` runs
+headlessly (a real, on-screen-capable video driver, not `SDL_VIDEODRIVER=dummy`
+— that renders nothing) for `N` frames, captures the final frame with
+`SDL_RenderReadPixels`, and exits. That's how the screenshots above were made,
+and it's reusable for regression screenshots in CI.
 
 ## Use the core from another CMake project
 

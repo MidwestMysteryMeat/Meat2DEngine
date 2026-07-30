@@ -36,6 +36,7 @@ struct LaunchOptions {
     std::string host;
     std::string directory_host{"127.0.0.1"};
     std::string player_name{"Living Lab"};
+    std::string screenshot_path;
 };
 
 Viewport calculate_viewport(SDL_Renderer* renderer, const meat2d::World& world) {
@@ -89,6 +90,8 @@ LaunchOptions parse_options(int argc, char** argv) {
         const std::string_view argument(argv[index]);
         if (argument == "--frames" && index + 1 < argc) {
             parse_integer(std::string_view(argv[++index]), options.frame_limit);
+        } else if (argument == "--screenshot" && index + 1 < argc) {
+            options.screenshot_path = argv[++index];
         } else if (argument == "--connect" && index + 1 < argc) {
             options.host = argv[++index];
         } else if (argument == "--port" && index + 1 < argc) {
@@ -571,6 +574,19 @@ int main(int argc, char** argv) {
 
             std::snprintf(line, sizeof(line), "render uploads %u", uploaded_regions);
             SDL_RenderDebugText(renderer, 10, text_y, line);
+        }
+
+        if (!options.screenshot_path.empty() && options.frame_limit != 0 &&
+            rendered_frames + 1 == options.frame_limit) {
+            SDL_Surface* frame = SDL_RenderReadPixels(renderer, nullptr);
+            if (frame != nullptr) {
+                if (!SDL_SavePNG(frame, options.screenshot_path.c_str())) {
+                    std::fprintf(stderr, "Screenshot save failed: %s\n", SDL_GetError());
+                }
+                SDL_DestroySurface(frame);
+            } else {
+                std::fprintf(stderr, "Screenshot capture failed: %s\n", SDL_GetError());
+            }
         }
 
         SDL_RenderPresent(renderer);
