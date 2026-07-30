@@ -62,6 +62,7 @@ std::optional<std::vector<std::uint8_t>> encode_chunk_delta(
     ByteWriter writer(maximum_chunk_delta_bytes);
     if (!writer.write_u8(chunk_codec_version) || !writer.write_u16(chunk_x) ||
         !writer.write_u16(chunk_y) || !writer.write_u64(chunk.revision) ||
+        !writer.write_u64(world.chunk_hash(chunk_index)) ||
         !writer.write_u16(static_cast<std::uint16_t>(cells_per_chunk))) {
         return std::nullopt;
     }
@@ -91,9 +92,11 @@ std::optional<ChunkDeltaInfo> apply_chunk_delta(
     std::uint16_t chunk_x = 0;
     std::uint16_t chunk_y = 0;
     std::uint64_t revision = 0;
+    std::uint64_t chunk_hash = 0;
     std::uint16_t cell_count = 0;
     if (!reader.read_u8(version) || !reader.read_u16(chunk_x) ||
         !reader.read_u16(chunk_y) || !reader.read_u64(revision) ||
+        !reader.read_u64(chunk_hash) ||
         !reader.read_u16(cell_count) || version != chunk_codec_version ||
         cell_count != cells_per_chunk ||
         chunk_x >= static_cast<std::uint16_t>(world.chunk_columns()) ||
@@ -122,6 +125,7 @@ std::optional<ChunkDeltaInfo> apply_chunk_delta(
         .chunk_x = chunk_x,
         .chunk_y = chunk_y,
         .revision = revision,
+        .chunk_hash = chunk_hash,
     };
     for (std::int32_t local_y = 0; local_y < chunk_size; ++local_y) {
         for (std::int32_t local_x = 0; local_x < chunk_size; ++local_x) {

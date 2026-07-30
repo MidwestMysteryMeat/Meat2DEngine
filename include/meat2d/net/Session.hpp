@@ -143,6 +143,8 @@ struct ClientUpdateStats {
     std::uint32_t invalid_datagrams{};
     std::uint32_t completed_chunks{};
     std::uint32_t changed_cells{};
+    std::uint32_t chunk_hash_mismatches{};
+    std::uint32_t reapplied_predictions{};
 };
 
 class AuthoritativeClient {
@@ -169,9 +171,20 @@ class AuthoritativeClient {
     [[nodiscard]] const std::optional<SnapshotMessage>& latest_snapshot() const noexcept;
     [[nodiscard]] const World* replicated_world() const noexcept;
     [[nodiscard]] World* replicated_world() noexcept;
+    [[nodiscard]] std::size_t pending_predictions() const noexcept;
+    [[nodiscard]] std::uint32_t acknowledged_input_sequence() const noexcept;
+    [[nodiscard]] std::uint64_t chunk_hash_mismatches() const noexcept;
     [[nodiscard]] std::string_view last_error() const noexcept;
 
   private:
+    struct PredictedPaint {
+        std::uint32_t input_sequence{};
+        std::uint32_t created_update{};
+        Vec2i target{};
+        MaterialId material{MaterialId::Empty};
+        std::uint8_t radius{};
+    };
+
     bool begin_connection(std::string player_name, std::uint64_t nonce);
     bool send_hello();
     bool send_directory_join();
@@ -179,6 +192,8 @@ class AuthoritativeClient {
     void handle_packet(const Packet& packet, ClientUpdateStats& stats);
     bool send_packet(const Packet& packet, ClientUpdateStats* stats);
     void flush_channel(ClientUpdateStats& stats);
+    void drop_acknowledged_predictions(std::uint32_t acknowledged_sequence);
+    std::uint32_t reapply_predictions(RectI chunk_rect);
     [[nodiscard]] std::uint32_t next_target_tick() const noexcept;
 
     UdpSocket socket_;
@@ -200,6 +215,9 @@ class AuthoritativeClient {
     std::optional<SnapshotMessage> latest_snapshot_;
     std::unique_ptr<World> replicated_world_;
     std::vector<std::uint64_t> chunk_revisions_;
+    std::vector<PredictedPaint> predicted_paints_;
+    std::uint32_t acknowledged_input_sequence_{};
+    std::uint64_t chunk_hash_mismatches_{};
     std::string last_error_;
 };
 

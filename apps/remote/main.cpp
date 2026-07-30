@@ -164,7 +164,9 @@ int main(int argc, char** argv) {
                       << " agents=" << client.latest_snapshot()->agent_count
                       << " organisms=" << client.latest_snapshot()->organism_population
                       << " chunks=" << stats.completed_chunks << " hash=0x" << std::hex
-                      << std::uppercase << client.latest_snapshot()->state_hash << std::dec << '\n';
+                      << std::uppercase << client.latest_snapshot()->state_hash << std::dec
+                      << " acked_input=" << client.acknowledged_input_sequence()
+                      << " hash_mismatches=" << client.chunk_hash_mismatches() << '\n';
         }
         if (client.state() == meat2d::net::ClientConnectionState::Rejected ||
             client.state() == meat2d::net::ClientConnectionState::TimedOut) {

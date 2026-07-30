@@ -258,6 +258,24 @@ std::uint64_t World::state_hash() const noexcept {
     return hash;
 }
 
+std::uint64_t World::chunk_hash(std::size_t chunk_index) const noexcept {
+    if (chunk_index >= chunks_.size()) {
+        return 0;
+    }
+    std::uint64_t hash = fnv_offset;
+    for (const auto& value : chunks_[chunk_index].cells) {
+        hash_byte(hash, static_cast<std::uint8_t>(value.material));
+        hash_byte(hash, value.variant);
+        hash_byte(hash, value.state);
+        const auto temperature = static_cast<std::uint16_t>(value.temperature);
+        hash_byte(hash, static_cast<std::uint8_t>(temperature));
+        hash_byte(hash, static_cast<std::uint8_t>(temperature >> 8U));
+        hash_byte(hash, static_cast<std::uint8_t>(value.velocity_x));
+        hash_byte(hash, static_cast<std::uint8_t>(value.velocity_y));
+    }
+    return hash;
+}
+
 void World::rasterize_rgba(std::span<std::uint8_t> destination) const {
     rasterize_rgba_region({0, 0, config_.width, config_.height}, destination);
 }

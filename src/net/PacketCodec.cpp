@@ -317,6 +317,7 @@ std::vector<std::uint8_t> encode_snapshot(const SnapshotMessage& message) {
     ByteWriter writer;
     writer.write_u32(message.server_tick);
     writer.write_u64(message.state_hash);
+    writer.write_u32(message.acknowledged_input_sequence);
     writer.write_u32(message.organism_population);
     writer.write_u16(message.agent_count);
     writer.write_u16(message.active_chunks);
@@ -327,6 +328,7 @@ std::optional<SnapshotMessage> decode_snapshot(std::span<const std::uint8_t> pay
     SnapshotMessage message{};
     ByteReader reader(payload);
     if (!reader.read_u32(message.server_tick) || !reader.read_u64(message.state_hash) ||
+        !reader.read_u32(message.acknowledged_input_sequence) ||
         !reader.read_u32(message.organism_population) || !reader.read_u16(message.agent_count) ||
         !reader.read_u16(message.active_chunks) || !reader.empty()) {
         return std::nullopt;

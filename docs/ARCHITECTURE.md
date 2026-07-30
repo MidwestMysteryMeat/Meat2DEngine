@@ -98,8 +98,11 @@ The networking baseline supports two to eight players:
 - Input sequence numbers and acknowledgement bitfields
 - Per-client chunk interest
 - Reliable control messages over an unreliable packet transport
-- Periodic snapshots with chunk revision deltas
-- State-hash diagnostics and a replicated client material world
+- Periodic snapshots with chunk revision deltas and per-client input
+  acknowledgements
+- Predicted local painting with reconciliation against authoritative chunks
+- Per-chunk and whole-simulation state-hash diagnostics and a replicated
+  client material world
 - LAN discovery and direct local/IP joins
 - Expiring public listings and directory-assisted UDP hole punching
 
@@ -113,8 +116,10 @@ token. Subsequent inputs must carry that token, increase their input sequence,
 fit a narrow future-tick window, pass a per-update rate budget, and satisfy
 world/material limits before entering the simulation command buffer.
 
-Movement prediction, reconciliation, encryption, identity authentication, and
-a relay fallback remain later layers. Direct, LAN, and public-directory hosting
+Paint inputs are predicted on the client replica and reconciled as
+acknowledged snapshots and hash-verified chunk deltas arrive. Entity movement
+prediction, encryption, identity authentication, and a relay fallback remain
+later layers. Direct, LAN, and public-directory hosting
 are described in [DISCOVERY_AND_HOSTING.md](DISCOVERY_AND_HOSTING.md). See
 [NETWORKING.md](NETWORKING.md) for the gameplay wire protocol.
 

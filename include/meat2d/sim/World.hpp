@@ -48,6 +48,7 @@ class World {
     void clear_dirty() noexcept;
 
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
+    [[nodiscard]] std::uint64_t chunk_hash(std::size_t chunk_index) const noexcept;
     void rasterize_rgba(std::span<std::uint8_t> destination) const;
     void rasterize_rgba_region(RectI region, std::span<std::uint8_t> destination) const;
 

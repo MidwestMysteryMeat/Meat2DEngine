@@ -24,13 +24,24 @@ interested chunk per client, retransmits overdue reliable packets, and removes
 timed-out clients.
 
 `AuthoritativeClient::update()` receives packets, advances reliability state,
-reassembles chunk messages, applies them to a read-only replicated-world view,
-and sends acknowledgements or periodic keepalives.
+reassembles chunk messages, applies them to the replicated-world view, and
+sends acknowledgements or periodic keepalives.
+
+Local paints are predicted: the client applies the disc to its replica
+immediately, remembers the prediction with its input sequence, and reconciles
+as authority arrives. Each snapshot acknowledges the highest input sequence the
+server accepted, which drains confirmed predictions. Each applied chunk delta
+overwrites the replica with authoritative cells, is verified against the
+sender's chunk hash, and then has any still-unacknowledged predicted paints
+that intersect the chunk re-applied so local feedback never flickers.
+Predictions that are never acknowledged (for example rate-limited or rejected
+inputs) expire after roughly ten seconds and disappear with the next
+authoritative overwrite.
 
 ## Wire contract
 
 - Protocol magic: `M2DN`
-- Protocol version: 1
+- Protocol version: 2
 - Default UDP port: 27182
 - LAN discovery UDP port: 27183
 - Public directory UDP port: 27184
@@ -53,9 +64,21 @@ duplicates while still returning acknowledgement information. Tests cover
 dropped initial delivery, repeated retransmission, duplicates, out-of-order
 delivery, and sequence wraparound.
 
-Snapshots are intentionally unreliable and periodic. They carry server tick,
-combined authoritative hash, agent count, organism population, and active
-chunk count.
+Snapshots are intentionally unreliable, periodic, and per-client. They carry
+server tick, combined authoritative hash, the client's highest accepted input
+sequence, agent count, organism population, and active chunk count.
+
+## State-hash diagnostics
+
+Two hash layers detect divergence. Snapshots carry the server's combined
+world/agent/organism hash for whole-simulation comparison by observers that
+run the full deterministic state. Chunk deltas carry a per-chunk FNV hash of
+the sender's cell fields; after applying a delta, the client hashes the same
+chunk in its replica and counts mismatches, which are exposed through
+`ClientUpdateStats::chunk_hash_mismatches`, the cumulative
+`AuthoritativeClient::chunk_hash_mismatches()`, the sandbox title bar, and the
+`meat2d_remote` log line. A healthy session reports zero mismatches; a nonzero
+count means codec, fragmentation, or replication corruption.
 
 ## Chunk replication
 

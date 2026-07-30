@@ -123,6 +123,19 @@ void test_packet_codec() {
               decoded_input->session_token == input.session_token,
           "input message changed during serialization");
 
+    const auto snapshot_message = meat2d::net::decode_snapshot(meat2d::net::encode_snapshot({
+        .server_tick = 777,
+        .state_hash = 0xABCDEF0123456789ULL,
+        .acknowledged_input_sequence = 41,
+        .organism_population = 5,
+        .agent_count = 3,
+        .active_chunks = 2,
+    }));
+    check(snapshot_message.has_value() &&
+              snapshot_message->acknowledged_input_sequence == 41 &&
+              snapshot_message->state_hash == 0xABCDEF0123456789ULL,
+          "snapshot message changed during serialization");
+
     const auto oversized_welcome = meat2d::net::decode_welcome(meat2d::net::encode_welcome({
         .client_nonce = 1,
         .session_token = 2,
@@ -238,6 +251,12 @@ void test_chunk_delta_fragmentation() {
     check(target.cell({17, 29}).material == source.cell({17, 29}).material &&
               target.cell({17, 29}).variant == source.cell({17, 29}).variant,
           "chunk cell changed during RLE replication");
+    check(applied && applied->chunk_hash == source.chunk_hash(0),
+          "chunk delta did not carry the sender's chunk hash");
+    check(applied && target.chunk_hash(0) == applied->chunk_hash,
+          "applied chunk hash diverged from the encoded chunk hash");
+    check(source.chunk_hash(1) != source.chunk_hash(0),
+          "distinct chunks unexpectedly share a hash");
 
     auto corrupted = encoded.value_or(std::vector<std::uint8_t>{});
     if (!corrupted.empty()) {
@@ -908,6 +927,87 @@ void test_authoritative_client_server_session() {
     check(server.client_count() == 0, "server retained a disconnected client slot");
 }
 
+void test_prediction_and_reconciliation() {
+    meat2d::net::AuthoritativeServer server({
+        .world =
+            {
+                .width = 128,
+                .height = 128,
+                .seed = 92,
+                .sleep_after_ticks = 30,
+            },
+        .port = 0,
+        .tick_rate = 60,
+        .maximum_clients = 2,
+        .interest_radius_chunks = 1,
+        .maximum_brush_radius = 8,
+        .snapshot_interval_ticks = 1,
+        .chunk_interval_ticks = 1,
+        .client_timeout_updates = 100,
+    });
+    check(server.start(), "prediction test server failed to start");
+    if (!server.running()) {
+        return;
+    }
+
+    meat2d::net::AuthoritativeClient client;
+    check(client.connect(
+              {
+                  .address = "localhost",
+                  .port = server.port(),
+              },
+              "Prediction Test", 0xFACADEU),
+          "prediction test client failed to start connecting");
+    for (int update = 0; update < 80 && !client.connected(); ++update) {
+        client.update();
+        server.update();
+        client.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(client.connected(), "prediction test handshake did not complete");
+    if (!client.connected()) {
+        return;
+    }
+
+    check(client.pending_predictions() == 0, "client started with pending predictions");
+    check(client.paint({40, 40}, meat2d::MaterialId::Stone, 3),
+          "connected client could not send a predicted paint");
+    const auto* mirror = client.replicated_world();
+    check(mirror != nullptr && mirror->material({40, 40}) == meat2d::MaterialId::Stone,
+          "paint was not predicted locally before server confirmation");
+    check(client.pending_predictions() == 1, "predicted paint was not tracked");
+
+    bool acknowledged = false;
+    bool authoritative = false;
+    bool replicated = false;
+    meat2d::net::ClientUpdateStats accumulated{};
+    for (int update = 0; update < 200; ++update) {
+        const auto stats = client.update();
+        accumulated.chunk_hash_mismatches += stats.chunk_hash_mismatches;
+        server.update();
+        client.update();
+        acknowledged = client.pending_predictions() == 0 &&
+                       client.acknowledged_input_sequence() != 0U;
+        authoritative =
+            server.simulation().world().material({40, 40}) == meat2d::MaterialId::Stone;
+        replicated = mirror->material({40, 40}) == meat2d::MaterialId::Stone;
+        if (acknowledged && authoritative && replicated && client.latest_snapshot()) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(acknowledged, "server snapshot did not acknowledge the predicted input");
+    check(authoritative, "server did not apply the predicted paint");
+    check(replicated, "replica did not converge on the painted material");
+    check(client.chunk_hash_mismatches() == 0 && accumulated.chunk_hash_mismatches == 0,
+          "chunk hash diagnostics reported divergence on a healthy session");
+    const auto snapshot = client.latest_snapshot();
+    check(snapshot.has_value() && snapshot->state_hash != 0U,
+          "snapshot did not carry a server state hash");
+
+    client.disconnect();
+}
+
 void test_organism_genome_and_ecology() {
     const meat2d::life::OrganismTraits expected{
         .photosynthesis = 12,
@@ -1433,6 +1533,7 @@ int main() {
         test_project_manager_validation_and_templates();
         test_sprite_sheet_metadata();
         test_authoritative_client_server_session();
+        test_prediction_and_reconciliation();
         test_organism_genome_and_ecology();
         test_organism_determinism_and_reproduction();
         test_material_catalog();

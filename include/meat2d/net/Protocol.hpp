@@ -7,7 +7,7 @@
 namespace meat2d::net {
 
 inline constexpr std::uint32_t protocol_magic = 0x4D32444EU; // "M2DN"
-inline constexpr std::uint16_t protocol_version = 1;
+inline constexpr std::uint16_t protocol_version = 2;
 inline constexpr std::uint16_t default_port = 27182;
 inline constexpr std::uint16_t default_lan_discovery_port = 27183;
 inline constexpr std::uint16_t default_directory_port = 27184;

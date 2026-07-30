@@ -605,7 +605,9 @@ int main(int argc, char** argv) {
                         std::to_string(snapshot ? snapshot->agent_count : 0U) + " | organisms " +
                         std::to_string(snapshot ? snapshot->organism_population : 0U) +
                         " | chunks " + std::to_string(last_network_stats.completed_chunks) +
-                        " | uploads " + std::to_string(uploaded_regions);
+                        " | uploads " + std::to_string(uploaded_regions) + " | predicted " +
+                        std::to_string(remote.pending_predictions()) + " | hash miss " +
+                        std::to_string(remote.chunk_hash_mismatches());
             } else {
                 title = "Meat2D Living Lab | " + std::string(material_name(brush)) + " | microbe " +
                         organism_name(organism_brush) + " r=" + std::to_string(brush_radius) +

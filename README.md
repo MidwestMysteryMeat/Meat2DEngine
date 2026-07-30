@@ -36,6 +36,8 @@ project editor, starter games, and one-command packaging.
   retransmission, duplicate suppression, and keepalives
 - Per-client chunk interest, RLE cell deltas, MTU-safe fragmentation,
   snapshots, and a replicated client world
+- Predicted local painting reconciled through snapshot input acknowledgements
+  and hash-verified authoritative chunks
 - Same-machine/direct joins, automatic LAN discovery, public server listings,
   and directory-assisted UDP hole punching
 - Self-hostable `meat2d_directory` service; gameplay remains peer-to-server
@@ -130,8 +132,11 @@ before enabling public advertisement. Editor-launched test processes close
 with the editor.
 
 In connected graphical clients, left/right painting is sent as validated,
-tick-targeted input to the server. The displayed material world is the
-interest-managed replica, not a locally trusted simulation.
+tick-targeted input to the server and simultaneously predicted on the local
+replica for immediate feedback. The displayed material world remains the
+interest-managed replica: authoritative chunk deltas overwrite predictions,
+unacknowledged paints are re-applied until the server confirms them, and every
+applied chunk is verified against the server's chunk hash.
 
 ## Elements-lab controls
 

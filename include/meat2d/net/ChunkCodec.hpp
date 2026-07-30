@@ -14,13 +14,14 @@ class World;
 
 namespace meat2d::net {
 
-inline constexpr std::uint8_t chunk_codec_version = 1;
+inline constexpr std::uint8_t chunk_codec_version = 2;
 inline constexpr std::size_t maximum_chunk_delta_bytes = 40'000;
 
 struct ChunkDeltaInfo {
     std::uint16_t chunk_x{};
     std::uint16_t chunk_y{};
     std::uint64_t revision{};
+    std::uint64_t chunk_hash{};
     std::uint32_t changed_cells{};
 };
 

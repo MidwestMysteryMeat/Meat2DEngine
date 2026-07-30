@@ -33,7 +33,7 @@
 - [x] Snapshot and chunk-delta serialization
 - [x] Direct joins, LAN discovery, and public server listings
 - [x] Self-hostable directory and UDP hole-punch introductions
-- [ ] Prediction, reconciliation, and state-hash diagnostics
+- [x] Prediction, reconciliation, and state-hash diagnostics
 - [x] Loss, retransmission, duplicate, wraparound, and loopback tests
 
 ## 0.4 — game creation and packaging

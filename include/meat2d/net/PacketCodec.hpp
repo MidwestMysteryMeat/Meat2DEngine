@@ -95,6 +95,7 @@ struct InputMessage {
 struct SnapshotMessage {
     std::uint32_t server_tick{};
     std::uint64_t state_hash{};
+    std::uint32_t acknowledged_input_sequence{};
     std::uint32_t organism_population{};
     std::uint16_t agent_count{};
     std::uint16_t active_chunks{};

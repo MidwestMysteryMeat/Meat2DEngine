@@ -428,15 +428,17 @@ void AuthoritativeServer::send_world_updates(ServerUpdateStats& stats) {
     if (current_tick % config_.snapshot_interval_ticks == 0U) {
         const auto active_chunks = static_cast<std::uint16_t>(std::min<std::uint32_t>(
             stats.simulation.world.active_chunks, std::numeric_limits<std::uint16_t>::max()));
-        const auto snapshot = encode_snapshot({
-            .server_tick = current_tick,
-            .state_hash = simulation_.state_hash(),
-            .organism_population = simulation_.organisms().population(),
-            .agent_count = static_cast<std::uint16_t>(std::min<std::size_t>(
-                simulation_.agents().size(), std::numeric_limits<std::uint16_t>::max())),
-            .active_chunks = active_chunks,
-        });
+        const auto state_hash = simulation_.state_hash();
         for (auto& client : clients_) {
+            const auto snapshot = encode_snapshot({
+                .server_tick = current_tick,
+                .state_hash = state_hash,
+                .acknowledged_input_sequence = client.last_input_sequence,
+                .organism_population = simulation_.organisms().population(),
+                .agent_count = static_cast<std::uint16_t>(std::min<std::size_t>(
+                    simulation_.agents().size(), std::numeric_limits<std::uint16_t>::max())),
+                .active_chunks = active_chunks,
+            });
             send_message(client, PacketType::Snapshot, snapshot, false, PacketFlagNone, stats);
         }
     }
@@ -707,6 +709,9 @@ ClientUpdateStats AuthoritativeClient::update() {
         send_packet(heartbeat, &stats);
     }
     fragments_.expire(network_update_);
+    std::erase_if(predicted_paints_, [this](const PredictedPaint& prediction) {
+        return network_update_ - prediction.created_update > 600U;
+    });
     if (state_ == ClientConnectionState::Connected &&
         network_update_ - last_server_update_ > 600U) {
         state_ = ClientConnectionState::TimedOut;
@@ -747,13 +752,27 @@ bool AuthoritativeClient::set_focus(Vec2i focus) {
 }
 
 bool AuthoritativeClient::paint(Vec2i target, MaterialId material, std::uint8_t radius) {
-    return send_input({
-        .kind = InputKind::Paint,
-        .focus = target,
-        .target = target,
-        .material = material,
-        .radius = radius,
-    });
+    const auto input_sequence = next_input_sequence_;
+    if (!send_input({
+            .kind = InputKind::Paint,
+            .focus = target,
+            .target = target,
+            .material = material,
+            .radius = radius,
+        })) {
+        return false;
+    }
+    if (replicated_world_ != nullptr && replicated_world_->in_bounds(target)) {
+        replicated_world_->paint_disc(target, radius, material);
+        predicted_paints_.push_back({
+            .input_sequence = input_sequence,
+            .created_update = network_update_,
+            .target = target,
+            .material = material,
+            .radius = radius,
+        });
+    }
+    return true;
 }
 
 ClientConnectionState AuthoritativeClient::state() const noexcept {
@@ -786,6 +805,50 @@ const World* AuthoritativeClient::replicated_world() const noexcept {
 
 World* AuthoritativeClient::replicated_world() noexcept {
     return replicated_world_.get();
+}
+
+std::size_t AuthoritativeClient::pending_predictions() const noexcept {
+    return predicted_paints_.size();
+}
+
+std::uint32_t AuthoritativeClient::acknowledged_input_sequence() const noexcept {
+    return acknowledged_input_sequence_;
+}
+
+std::uint64_t AuthoritativeClient::chunk_hash_mismatches() const noexcept {
+    return chunk_hash_mismatches_;
+}
+
+void AuthoritativeClient::drop_acknowledged_predictions(std::uint32_t acknowledged_sequence) {
+    std::erase_if(predicted_paints_, [acknowledged_sequence](const PredictedPaint& prediction) {
+        return !sequence_more_recent(prediction.input_sequence, acknowledged_sequence);
+    });
+}
+
+std::uint32_t AuthoritativeClient::reapply_predictions(RectI chunk_rect) {
+    if (replicated_world_ == nullptr || predicted_paints_.empty()) {
+        return 0;
+    }
+    std::uint32_t reapplied = 0;
+    for (const auto& prediction : predicted_paints_) {
+        const auto radius = static_cast<std::int32_t>(prediction.radius);
+        const RectI disc_bounds{
+            prediction.target.x - radius,
+            prediction.target.y - radius,
+            radius * 2 + 1,
+            radius * 2 + 1,
+        };
+        const bool intersects = disc_bounds.x < chunk_rect.x + chunk_rect.width &&
+                                chunk_rect.x < disc_bounds.x + disc_bounds.width &&
+                                disc_bounds.y < chunk_rect.y + chunk_rect.height &&
+                                chunk_rect.y < disc_bounds.y + disc_bounds.height;
+        if (!intersects) {
+            continue;
+        }
+        replicated_world_->paint_disc(prediction.target, radius, prediction.material);
+        ++reapplied;
+    }
+    return reapplied;
 }
 
 std::string_view AuthoritativeClient::last_error() const noexcept {
@@ -873,11 +936,19 @@ void AuthoritativeClient::handle_packet(const Packet& packet, ClientUpdateStats&
         });
         chunk_revisions_.assign(replicated_world_->chunks().size(),
                                 std::numeric_limits<std::uint64_t>::max());
+        predicted_paints_.clear();
+        acknowledged_input_sequence_ = 0;
+        chunk_hash_mismatches_ = 0;
         break;
     }
     case PacketType::Snapshot:
         if (const auto message = decode_snapshot(packet.payload)) {
             latest_snapshot_ = message;
+            if (sequence_more_recent(message->acknowledged_input_sequence,
+                                     acknowledged_input_sequence_)) {
+                acknowledged_input_sequence_ = message->acknowledged_input_sequence;
+                drop_acknowledged_predictions(acknowledged_input_sequence_);
+            }
         } else {
             ++stats.invalid_datagrams;
         }
@@ -899,6 +970,16 @@ void AuthoritativeClient::handle_packet(const Packet& packet, ClientUpdateStats&
             if (index < chunk_revisions_.size()) {
                 chunk_revisions_[index] = applied->revision;
             }
+            if (replicated_world_->chunk_hash(index) != applied->chunk_hash) {
+                ++stats.chunk_hash_mismatches;
+                ++chunk_hash_mismatches_;
+            }
+            stats.reapplied_predictions += reapply_predictions({
+                static_cast<std::int32_t>(applied->chunk_x) * chunk_size,
+                static_cast<std::int32_t>(applied->chunk_y) * chunk_size,
+                chunk_size,
+                chunk_size,
+            });
             ++stats.completed_chunks;
             stats.changed_cells += applied->changed_cells;
         }
