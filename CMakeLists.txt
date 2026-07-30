@@ -12,6 +12,7 @@ include(CTest)
 
 option(MEAT2D_BUILD_CLIENT "Build the SDL3 interactive sandbox" ON)
 option(MEAT2D_BUILD_SERVER "Build the headless simulation server" ON)
+option(MEAT2D_BUILD_REMOTE_CLIENT "Build the headless multiplayer client" ON)
 option(MEAT2D_BUILD_TESTS "Build unit and determinism tests" ON)
 option(MEAT2D_BUILD_BENCHMARKS "Build simulation benchmarks" ON)
 option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
@@ -55,6 +56,49 @@ else()
     endif()
 endif()
 
+add_library(
+    meat2d_net
+    src/net/ChunkCodec.cpp
+    src/net/Fragmentation.cpp
+    src/net/PacketCodec.cpp
+    src/net/Reliability.cpp
+    src/net/Session.cpp
+    src/net/UdpSocket.cpp
+)
+add_library(Meat2D::Net ALIAS meat2d_net)
+set_target_properties(meat2d_net PROPERTIES EXPORT_NAME Net)
+target_compile_features(meat2d_net PUBLIC cxx_std_20)
+target_include_directories(
+    meat2d_net
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(meat2d_net PUBLIC Meat2D::Core)
+if(WIN32)
+    target_link_libraries(meat2d_net PUBLIC ws2_32)
+endif()
+
+if(MSVC)
+    target_compile_options(meat2d_net PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_net PRIVATE /WX)
+    endif()
+else()
+    target_compile_options(
+        meat2d_net
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wconversion
+            -Wshadow
+    )
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_net PRIVATE -Werror)
+    endif()
+endif()
+
 if(MEAT2D_BUILD_CLIENT)
     include(FetchContent)
 
@@ -75,19 +119,25 @@ if(MEAT2D_BUILD_CLIENT)
 
     add_executable(meat2d_sandbox apps/sandbox/main.cpp)
     target_compile_features(meat2d_sandbox PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_sandbox PRIVATE Meat2D::Core SDL3::SDL3)
+    target_link_libraries(meat2d_sandbox PRIVATE Meat2D::Net SDL3::SDL3)
 endif()
 
 if(MEAT2D_BUILD_SERVER)
     add_executable(meat2d_server apps/server/main.cpp)
     target_compile_features(meat2d_server PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_server PRIVATE Meat2D::Core)
+    target_link_libraries(meat2d_server PRIVATE Meat2D::Net)
+endif()
+
+if(MEAT2D_BUILD_REMOTE_CLIENT)
+    add_executable(meat2d_remote apps/remote/main.cpp)
+    target_compile_features(meat2d_remote PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_remote PRIVATE Meat2D::Net)
 endif()
 
 if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
     add_executable(meat2d_tests tests/simulation_tests.cpp)
     target_compile_features(meat2d_tests PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_tests PRIVATE Meat2D::Core)
+    target_link_libraries(meat2d_tests PRIVATE Meat2D::Net)
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
 endif()
 
@@ -98,13 +148,17 @@ if(MEAT2D_BUILD_BENCHMARKS)
 endif()
 
 install(
-    TARGETS meat2d_core
+    TARGETS meat2d_core meat2d_net
     EXPORT Meat2DTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+    FILES LICENSE NOTICE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/Meat2D
+)
 install(
     EXPORT Meat2DTargets
     FILE Meat2DTargets.cmake

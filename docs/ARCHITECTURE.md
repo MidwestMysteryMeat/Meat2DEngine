@@ -89,22 +89,30 @@ Future multithreading will operate on dependency-safe chunk phases and merge
 commands in a stable order. Parallel execution cannot be allowed to select a
 different winner for contested cells.
 
-## Multiplayer direction
+## Multiplayer
 
-The first networking target is two to eight players:
+The networking baseline supports two to eight players:
 
-- Dedicated or listen authoritative server
+- Dedicated authoritative server and reusable client/server session classes
 - Fixed server ticks
 - Input sequence numbers and acknowledgement bitfields
 - Per-client chunk interest
 - Reliable control messages over an unreliable packet transport
 - Periodic snapshots with chunk revision deltas
-- Client-side movement prediction and reconciliation
-- State-hash diagnostics and recorded command streams
+- State-hash diagnostics and a replicated client material world
 
-The protocol header is versioned from the first commit. Networking transport
-and serialization are not implemented yet; the header reserves their stable
-contract.
+Wire values are explicitly little-endian encoded; native struct memory is never
+sent. Packets stay at or below 1,200 bytes. Large RLE chunk messages are split
+into reliable fragments and reassembled out of order. Each connected client
+tracks a focus-centered chunk interest region and known chunk revisions.
+
+Hello/Welcome exchanges bind a client nonce to a server-generated session
+token. Subsequent inputs must carry that token, increase their input sequence,
+fit a narrow future-tick window, pass a per-update rate budget, and satisfy
+world/material limits before entering the simulation command buffer.
+
+Movement prediction, reconciliation, encryption, identity authentication, and
+NAT traversal remain later layers. See [NETWORKING.md](NETWORKING.md).
 
 ## AI direction
 
@@ -138,7 +146,8 @@ sprite/entity passes without changing the cell-state API.
 
 ## Packaging
 
-The `meat2d_core` library exports as `Meat2D::Core`. It supports:
+The `meat2d_core` and `meat2d_net` libraries export as `Meat2D::Core` and
+`Meat2D::Net`. They support:
 
 - Direct `add_subdirectory`
 - CMake `FetchContent`

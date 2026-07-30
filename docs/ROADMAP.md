@@ -2,7 +2,7 @@
 
 ## 0.1 — deterministic sand core
 
-- [x] Public MIT repository
+- [x] Public Apache-2.0 repository with NOTICE
 - [x] Portable C++20/CMake structure
 - [x] Chunked eight-byte cells
 - [x] Active/sleeping chunks
@@ -25,14 +25,14 @@
 
 ## 0.3 — authoritative multiplayer
 
-- [ ] UDP transport
-- [ ] Connection and handshake state
-- [ ] Reliable-message channel
-- [ ] Input commands and server tick loop
-- [ ] Chunk interest management
-- [ ] Snapshot and chunk-delta serialization
+- [x] UDP transport
+- [x] Connection and session-token handshake state
+- [x] Reliable-message channel
+- [x] Input commands and server tick loop
+- [x] Chunk interest management
+- [x] Snapshot and chunk-delta serialization
 - [ ] Prediction, reconciliation, and state-hash diagnostics
-- [ ] Latency/loss simulation tests
+- [x] Loss, retransmission, duplicate, wraparound, and loopback tests
 
 ## 0.4 — game creation and packaging
 

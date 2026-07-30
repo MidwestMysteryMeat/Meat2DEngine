@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -9,6 +10,17 @@ inline constexpr std::uint32_t protocol_magic = 0x4D32444EU; // "M2DN"
 inline constexpr std::uint16_t protocol_version = 1;
 inline constexpr std::uint16_t default_port = 27182;
 inline constexpr std::uint8_t maximum_players = 8;
+inline constexpr std::size_t maximum_datagram_bytes = 1'200;
+inline constexpr std::size_t encoded_header_bytes = 28;
+inline constexpr std::size_t maximum_player_name_bytes = 24;
+inline constexpr std::int32_t maximum_network_world_dimension = 16'384;
+inline constexpr std::int64_t maximum_network_world_cells = 32'000'000;
+
+enum PacketFlags : std::uint8_t {
+    PacketFlagNone = 0,
+    PacketFlagReliable = 1U << 0U,
+    PacketFlagFragment = 1U << 1U
+};
 
 enum class PacketType : std::uint8_t {
     Hello,
@@ -18,6 +30,11 @@ enum class PacketType : std::uint8_t {
     ChunkDelta,
     Acknowledgement,
     Disconnect
+};
+
+enum class InputKind : std::uint8_t {
+    SetFocus,
+    Paint
 };
 
 struct PacketHeader {

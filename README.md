@@ -5,8 +5,8 @@ Its target space sits between falling-sand games, Terraria-like sandboxes,
 Worms-like terrain destruction, and multiplayer side-view or top-down shooters.
 
 The project is intentionally early. The first working slice is a deterministic
-side-view elements laboratory. Networking, AI, game templates, and one-command
-packaging are being built on top of the same authoritative state.
+side-view living laboratory with an authoritative multiplayer server. Game
+templates and one-command packaging are being built on the same state.
 
 ## Current capabilities
 
@@ -28,8 +28,14 @@ packaging are being built on top of the same authoritative state.
 - Interactive SDL3 elements laboratory with the complete paintable catalog
 - Headless simulation/server target
 - State hashing, unit tests, cross-chunk tests, and a benchmark
-- Versioned packet header reserved for authoritative 2–8 player networking
-- Installable `Meat2D::Core` CMake target and CPack SDK archives
+- Nonblocking UDP client/server sessions for two to eight players on Windows
+  and Linux
+- Session-token handshake, tick-windowed inputs, sequence/ack bitfields,
+  retransmission, duplicate suppression, and keepalives
+- Per-client chunk interest, RLE cell deltas, MTU-safe fragmentation,
+  snapshots, and a replicated client world
+- Installable `Meat2D::Core` and `Meat2D::Net` CMake targets and CPack SDK
+  archives
 
 ## Build
 
@@ -64,6 +70,30 @@ Run:
 
 On a multi-config generator, executables may be under a `Debug` or `Release`
 subdirectory.
+
+## Multiplayer quick start
+
+Start the real-time authoritative server:
+
+```bash
+./build/headless/meat2d_server --listen --port 27182
+```
+
+Connect one or more graphical living labs:
+
+```bash
+./build/dev/meat2d_sandbox --connect localhost --port 27182 --name Player1
+```
+
+Or use the headless connection/replication smoke client:
+
+```bash
+./build/headless/meat2d_remote --host localhost --port 27182
+```
+
+In connected graphical clients, left/right painting is sent as validated,
+tick-targeted input to the server. The displayed material world is the
+interest-managed replica, not a locally trusted simulation.
 
 ## Elements-lab controls
 
@@ -102,6 +132,7 @@ include(FetchContent)
 
 set(MEAT2D_BUILD_CLIENT OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(MEAT2D_BUILD_REMOTE_CLIENT OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
@@ -112,7 +143,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Meat2D)
 
-target_link_libraries(your_game PRIVATE Meat2D::Core)
+target_link_libraries(your_game PRIVATE Meat2D::Core) # simulation only
+# target_link_libraries(your_game PRIVATE Meat2D::Net) # simulation + networking
 ```
 
 Tagged releases will replace `main` as the recommended `GIT_TAG`.
@@ -125,7 +157,7 @@ cmake --install build/release --prefix meat2d-sdk
 
 ```cmake
 find_package(Meat2D CONFIG REQUIRED)
-target_link_libraries(your_game PRIVATE Meat2D::Core)
+target_link_libraries(your_game PRIVATE Meat2D::Net)
 ```
 
 ## Determinism contract
@@ -136,15 +168,16 @@ noise. Two worlds with equal configuration, state, and commands must produce
 the same state hash after every tick.
 
 Determinism is required for reproducible debugging and compact network
-validation. The planned multiplayer model remains server-authoritative; clients
-will not be trusted merely because deterministic replay is available.
+validation. Multiplayer is server-authoritative; clients are not trusted merely
+because deterministic replay is available.
 
 ## Project layout
 
 ```text
 apps/
   sandbox/       SDL3 interactive living laboratory
-  server/        headless authoritative simulation target
+  server/        headless benchmark and authoritative server
+  remote/        headless multiplayer smoke client
 benchmarks/      simulation throughput checks
 cmake/           installed-package configuration
 docs/            architecture and roadmap
@@ -153,8 +186,9 @@ src/             engine implementation
 tests/           unit and determinism tests
 ```
 
-See [AI and Life](docs/AI_AND_LIFE.md), [Materials](docs/MATERIALS.md),
-[Architecture](docs/ARCHITECTURE.md), and [Roadmap](docs/ROADMAP.md).
+See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
+[Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
+[Roadmap](docs/ROADMAP.md).
 
 ## License
 

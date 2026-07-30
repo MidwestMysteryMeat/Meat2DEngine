@@ -536,7 +536,7 @@ void LivingSimulation::update_needs(Agent& agent) {
 }
 
 bool LivingSimulation::apply_command(const EntityCommand& command, LivingStats& stats) {
-    if (command.type == CommandType::Paint && command.issuer == world_issuer) {
+    if (command.type == CommandType::Paint) {
         return world_.set_material(command.target, command.material);
     }
 
