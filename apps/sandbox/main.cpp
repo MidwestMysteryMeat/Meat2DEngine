@@ -324,6 +324,8 @@ int main(int argc, char** argv) {
     bool running = true;
     bool paused = false;
     bool single_step = false;
+    bool show_profiler = false;
+    double simulation_ms_this_frame = 0.0;
     std::uint32_t uploaded_regions = 0;
     int brush_radius = 5;
     meat2d::MaterialId brush = meat2d::MaterialId::Sand;
@@ -349,6 +351,9 @@ int main(int argc, char** argv) {
                     break;
                 case SDLK_SPACE:
                     paused = !paused;
+                    break;
+                case SDLK_F1:
+                    show_profiler = !show_profiler;
                     break;
                 case SDLK_N:
                     single_step = true;
@@ -444,9 +449,14 @@ int main(int argc, char** argv) {
             }
         }
 
+        simulation_ms_this_frame = 0.0;
         if (remote_mode) {
             while (accumulator >= fixed_seconds) {
+                const auto step_start = std::chrono::steady_clock::now();
                 last_network_stats = remote.update();
+                simulation_ms_this_frame += std::chrono::duration<double, std::milli>(
+                                                std::chrono::steady_clock::now() - step_start)
+                                                .count();
                 ++network_steps;
                 if (remote.connected()) {
                     const auto network_radius =
@@ -464,7 +474,11 @@ int main(int argc, char** argv) {
             single_step = false;
         } else {
             while ((accumulator >= fixed_seconds && !paused) || single_step) {
+                const auto step_start = std::chrono::steady_clock::now();
                 last_stats = simulation.step();
+                simulation_ms_this_frame += std::chrono::duration<double, std::milli>(
+                                                std::chrono::steady_clock::now() - step_start)
+                                                .count();
                 accumulator = std::max(0.0, accumulator - fixed_seconds);
                 single_step = false;
                 if (paused) {
@@ -516,6 +530,49 @@ int main(int argc, char** argv) {
         SDL_RenderClear(renderer);
         const auto render_viewport = calculate_viewport(renderer, *displayed_world);
         SDL_RenderTexture(renderer, texture, nullptr, &render_viewport.destination);
+
+        if (show_profiler) {
+            const SDL_FRect backdrop{6, 6, 300, remote_mode ? 58.0F : 106.0F};
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
+            SDL_RenderFillRect(renderer, &backdrop);
+            SDL_SetRenderDrawColor(renderer, 235, 235, 240, 255);
+
+            char line[160];
+            float text_y = 10.0F;
+            std::snprintf(line, sizeof(line), "frame %.2f ms (%.0f fps)", frame_seconds * 1000.0,
+                         frame_seconds > 0.0 ? 1.0 / frame_seconds : 0.0);
+            SDL_RenderDebugText(renderer, 10, text_y, line);
+            text_y += 12.0F;
+
+            std::snprintf(line, sizeof(line), "sim step %.3f ms", simulation_ms_this_frame);
+            SDL_RenderDebugText(renderer, 10, text_y, line);
+            text_y += 12.0F;
+
+            if (!remote_mode) {
+                std::snprintf(line, sizeof(line), "tick %llu moved %llu reacted %llu heat %llu",
+                             static_cast<unsigned long long>(simulation.world().current_tick()),
+                             static_cast<unsigned long long>(last_stats.world.moved_cells),
+                             static_cast<unsigned long long>(last_stats.world.reacted_cells),
+                             static_cast<unsigned long long>(last_stats.world.heat_transfers));
+                SDL_RenderDebugText(renderer, 10, text_y, line);
+                text_y += 12.0F;
+
+                std::snprintf(line, sizeof(line), "chunks active %u sleeping %u changed %u",
+                             last_stats.world.active_chunks, last_stats.world.sleeping_chunks,
+                             last_stats.world.changed_chunks);
+                SDL_RenderDebugText(renderer, 10, text_y, line);
+                text_y += 12.0F;
+
+                std::snprintf(line, sizeof(line), "agents %zu organisms %zu",
+                             simulation.agents().size(), simulation.organisms().population());
+                SDL_RenderDebugText(renderer, 10, text_y, line);
+                text_y += 12.0F;
+            }
+
+            std::snprintf(line, sizeof(line), "render uploads %u", uploaded_regions);
+            SDL_RenderDebugText(renderer, 10, text_y, line);
+        }
+
         SDL_RenderPresent(renderer);
         ++rendered_frames;
         if (options.frame_limit != 0 && rendered_frames >= options.frame_limit) {

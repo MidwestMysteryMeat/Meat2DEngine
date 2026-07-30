@@ -161,6 +161,7 @@ applied chunk is verified against the server's chunk hash.
 | `X` | Select decomposer organisms |
 | `V` | Select extremophile organisms |
 | `Space` | Pause |
+| `F1` | Toggle the profiling overlay (frame/step timing, chunk and cell stats) |
 | `N` | Advance one tick |
 | `R` | Reset the laboratory |
 | `C` | Clear the world |
