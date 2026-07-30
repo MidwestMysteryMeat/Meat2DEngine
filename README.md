@@ -241,6 +241,22 @@ Determinism is required for reproducible debugging and compact network
 validation. Multiplayer is server-authoritative; clients are not trusted merely
 because deterministic replay is available.
 
+## Parallel simulation
+
+`World::step_parallel(workers = 0)` multithreads a tick across chunk phases
+(`0` picks `hardware_concurrency`) instead of `step()`'s single-threaded
+scanline — a different, dependency-safe update order (see
+[Parallel chunk scheduling](docs/ARCHITECTURE.md#parallel-chunk-scheduling)
+for why that's necessary and how it stays race-free), not a drop-in
+replacement: its exact per-tick outcome doesn't have to match `step()`'s, but
+it is required to be — and is tested to be — identical run-to-run regardless
+of worker count.
+
+```bash
+./build/headless/meat2d_server --ticks 600 --parallel        # auto worker count
+./build/headless/meat2d_server --ticks 600 --parallel 4      # explicit
+```
+
 ## Persistence and streaming
 
 `meat2d::ChunkStore` (`include/meat2d/sim/ChunkStore.hpp`) saves and loads a

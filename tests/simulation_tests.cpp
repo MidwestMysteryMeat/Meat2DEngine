@@ -1789,6 +1789,141 @@ void test_chunk_store_persistence_across_worlds() {
     std::filesystem::remove_all(directory, error);
 }
 
+void test_parallel_step_deterministic_across_thread_counts() {
+    meat2d::World single_threaded({
+        .width = 192,
+        .height = 128,
+        .seed = 91,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::World multi_threaded({
+        .width = 192,
+        .height = 128,
+        .seed = 91,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::seed_sand_lab(single_threaded);
+    meat2d::seed_sand_lab(multi_threaded);
+
+    for (int tick = 0; tick < 180; ++tick) {
+        single_threaded.step_parallel(1);
+        multi_threaded.step_parallel(5);
+        check(single_threaded.state_hash() == multi_threaded.state_hash(),
+              "step_parallel produced a different result with a different worker count");
+        if (failures != 0) {
+            return;
+        }
+    }
+}
+
+void test_parallel_step_reproducible_across_runs() {
+    meat2d::World first({
+        .width = 192,
+        .height = 128,
+        .seed = 92,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::World second({
+        .width = 192,
+        .height = 128,
+        .seed = 92,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::seed_sand_lab(first);
+    meat2d::seed_sand_lab(second);
+
+    for (int tick = 0; tick < 180; ++tick) {
+        first.step_parallel(4);
+        second.step_parallel(4);
+        check(first.state_hash() == second.state_hash(),
+              "two identically seeded worlds diverged under step_parallel");
+        if (failures != 0) {
+            return;
+        }
+    }
+}
+
+void test_parallel_step_conserves_water_and_settles_sand() {
+    meat2d::World world({
+        .width = 128,
+        .height = 96,
+        .seed = 93,
+        .sleep_after_ticks = 30,
+    });
+    for (int x = 0; x < world.width(); ++x) {
+        world.set_material({x, world.height() - 1}, meat2d::MaterialId::Stone);
+    }
+    const auto painted_water = world.paint_disc({64, 8}, 6, meat2d::MaterialId::Water);
+    world.paint_disc({20, 4}, 4, meat2d::MaterialId::Sand);
+
+    for (int tick = 0; tick < 200; ++tick) {
+        world.step_parallel(4);
+    }
+
+    std::size_t water_cells = 0;
+    bool sand_on_floor = false;
+    for (int y = 0; y < world.height(); ++y) {
+        for (int x = 0; x < world.width(); ++x) {
+            const auto material = world.material({x, y});
+            if (material == meat2d::MaterialId::Water) {
+                ++water_cells;
+            }
+            if (material == meat2d::MaterialId::Sand && y == world.height() - 2) {
+                sand_on_floor = true;
+            }
+        }
+    }
+    check(water_cells == painted_water, "step_parallel changed the water cell count");
+    check(sand_on_floor, "step_parallel did not settle sand onto the floor");
+}
+
+void test_parallel_step_records_dirty_regions() {
+    meat2d::World world({
+        .width = 96,
+        .height = 96,
+        .seed = 94,
+        .sleep_after_ticks = 30,
+    });
+    world.paint_disc({40, 8}, 6, meat2d::MaterialId::Sand);
+    world.paint_disc({70, 8}, 5, meat2d::MaterialId::Water);
+
+    const auto pixel_count = 96U * 96U * 4U;
+    std::vector<std::uint8_t> partial(pixel_count);
+    world.rasterize_rgba(partial);
+    world.clear_dirty();
+
+    for (int tick = 0; tick < 24; ++tick) {
+        world.step_parallel(3);
+    }
+
+    // Same property test_dirty_region_rasterization proves for step(): patch
+    // `partial` (a pre-step snapshot) using only the regions step_parallel's
+    // deferred mark_changed reported dirty, and it must exactly reproduce a
+    // fresh full rasterization — proving the thread_local touch-log merge
+    // didn't drop any changed cell.
+    bool found_dirty = false;
+    for (std::int32_t row = 0; row < world.chunk_rows(); ++row) {
+        for (std::int32_t column = 0; column < world.chunk_columns(); ++column) {
+            const auto region = world.chunk_dirty_rect(column, row);
+            if (region.empty()) {
+                continue;
+            }
+            found_dirty = true;
+            check(region.x >= 0 && region.y >= 0 && region.x + region.width <= 96 &&
+                      region.y + region.height <= 96,
+                  "step_parallel's dirty rect escaped the world bounds");
+            world.rasterize_rgba_region(region, partial);
+        }
+    }
+    check(found_dirty, "step_parallel's deferred mark_changed produced no dirty regions");
+
+    std::vector<std::uint8_t> full(pixel_count);
+    world.rasterize_rgba(full);
+    check(full == partial,
+          "step_parallel's dirty-region refresh did not reproduce the full rasterization — "
+          "the deferred touch-log merge dropped a changed cell");
+}
+
 } // namespace
 
 int main() {
@@ -1830,6 +1965,10 @@ int main() {
         test_projectile_leaves_world_without_impact();
         test_replay_round_trip_and_divergence();
         test_chunk_store_persistence_across_worlds();
+        test_parallel_step_deterministic_across_thread_counts();
+        test_parallel_step_reproducible_across_runs();
+        test_parallel_step_conserves_water_and_settles_sand();
+        test_parallel_step_records_dirty_regions();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';
         return 1;

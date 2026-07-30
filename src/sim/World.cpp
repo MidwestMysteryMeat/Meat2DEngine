@@ -2,9 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <condition_variable>
 #include <cstdlib>
+#include <functional>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
+#include <utility>
 
 namespace meat2d {
 namespace {
@@ -241,6 +246,11 @@ TickStats World::step() {
         }
     }
 
+    finalize_tick(stats, active_at_start);
+    return stats;
+}
+
+void World::finalize_tick(TickStats& stats, std::span<const std::uint8_t> active_at_start) noexcept {
     for (std::size_t index = 0; index < chunks_.size(); ++index) {
         auto& chunk = chunks_[index];
         if (chunk.changed) {
@@ -264,7 +274,213 @@ TickStats World::step() {
             ++stats.sleeping_chunks;
         }
     }
+}
 
+void World::process_chunk_cells(
+    std::int32_t column,
+    std::int32_t row,
+    std::uint8_t epoch,
+    TickStats& stats) {
+    const auto x_begin = column * chunk_size;
+    const auto x_end = std::min(x_begin + chunk_size, config_.width);
+    const auto y_begin = row * chunk_size;
+    const auto y_end = std::min(y_begin + chunk_size, config_.height);
+
+    for (std::int32_t y = y_end - 1; y >= y_begin; --y) {
+        const bool left_to_right = (noise({0, y}, tick_) & 1U) == 0U;
+        for (std::int32_t offset = 0; offset < x_end - x_begin; ++offset) {
+            const std::int32_t x =
+                left_to_right ? x_begin + offset : x_end - 1 - offset;
+            update_cell({x, y}, epoch, stats);
+        }
+    }
+}
+
+namespace {
+thread_local std::vector<Vec2i>* parallel_touch_log = nullptr;
+
+// A fixed-size pool of worker threads reused across step_parallel calls, so
+// only the first call pays OS thread-creation cost. run() is a barrier: it
+// blocks the calling thread until every worker in [0, active) has executed
+// task(worker_index) exactly once for the current generation. Workers with
+// index >= active stay parked without touching completed_count_, so the
+// barrier target is exactly `active`, independent of the pool's total size.
+class ChunkWorkerPool {
+  public:
+    explicit ChunkWorkerPool(std::size_t worker_count) {
+        workers_.reserve(worker_count);
+        for (std::size_t index = 0; index < worker_count; ++index) {
+            workers_.emplace_back([this, index]() { worker_loop(index); });
+        }
+    }
+
+    ~ChunkWorkerPool() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        condition_.notify_all();
+        for (auto& worker : workers_) {
+            worker.join();
+        }
+    }
+
+    ChunkWorkerPool(const ChunkWorkerPool&) = delete;
+    ChunkWorkerPool& operator=(const ChunkWorkerPool&) = delete;
+
+    [[nodiscard]] std::size_t worker_count() const noexcept {
+        return workers_.size();
+    }
+
+    void run(std::size_t active, const std::function<void(std::size_t)>& task) {
+        if (active == 0) {
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            task_ = &task;
+            active_count_ = active;
+            completed_count_ = 0;
+            ++generation_;
+        }
+        condition_.notify_all();
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        done_condition_.wait(lock, [this]() { return completed_count_ == active_count_; });
+        task_ = nullptr;
+    }
+
+  private:
+    void worker_loop(std::size_t index) {
+        std::uint64_t seen_generation = 0;
+        while (true) {
+            std::unique_lock<std::mutex> lock(mutex_);
+            condition_.wait(lock, [this, seen_generation]() {
+                return stopping_ || generation_ != seen_generation;
+            });
+            if (stopping_) {
+                return;
+            }
+            seen_generation = generation_;
+            const auto active = active_count_;
+            if (index >= active) {
+                continue;
+            }
+            const auto* task = task_;
+            lock.unlock();
+
+            (*task)(index);
+
+            lock.lock();
+            ++completed_count_;
+            if (completed_count_ == active_count_) {
+                done_condition_.notify_one();
+            }
+        }
+    }
+
+    std::vector<std::thread> workers_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    std::condition_variable done_condition_;
+    const std::function<void(std::size_t)>* task_{};
+    std::size_t active_count_{};
+    std::size_t completed_count_{};
+    std::uint64_t generation_{};
+    bool stopping_{};
+};
+
+// Always sized at hardware_concurrency regardless of any single call's
+// requested worker count — run()'s `active` parameter is what varies per
+// call (a worker index >= active just stays parked, see worker_loop). If
+// this were sized to the first caller's request, an earlier small request
+// would permanently cap every later, larger one on the same thread.
+ChunkWorkerPool& parallel_worker_pool() {
+    static thread_local ChunkWorkerPool pool(std::max<std::size_t>(
+        1, std::thread::hardware_concurrency()));
+    return pool;
+}
+} // namespace
+
+TickStats World::step_parallel(std::size_t worker_count) {
+    ++tick_;
+    const auto epoch = static_cast<std::uint8_t>(((tick_ - 1U) % 255U) + 1U);
+    if (epoch == 1U && tick_ > 1U) {
+        reset_update_epochs();
+    }
+
+    std::vector<std::uint8_t> active_at_start(chunks_.size(), 0);
+    for (std::size_t index = 0; index < chunks_.size(); ++index) {
+        active_at_start[index] = chunks_[index].active ? 1U : 0U;
+    }
+
+    TickStats stats{};
+    stats.tick = tick_;
+
+    auto& pool = parallel_worker_pool();
+    if (worker_count == 0) {
+        worker_count = pool.worker_count();
+    }
+
+    // Phase (column % 2, row % 2): any two chunks sharing a phase are at
+    // least two chunks apart on some axis, so they are never adjacent, not
+    // even diagonally. See step_parallel's declaration for why that spacing
+    // is sufficient given every reaction's maximum write reach.
+    for (std::int32_t phase = 0; phase < 4; ++phase) {
+        const auto phase_column_parity = phase & 1;
+        const auto phase_row_parity = (phase >> 1) & 1;
+
+        std::vector<std::pair<std::int32_t, std::int32_t>> phase_chunks;
+        for (std::int32_t row = 0; row < chunk_rows_; ++row) {
+            if ((row & 1) != phase_row_parity) {
+                continue;
+            }
+            for (std::int32_t column = 0; column < chunk_columns_; ++column) {
+                if ((column & 1) != phase_column_parity) {
+                    continue;
+                }
+                if (active_at_start[static_cast<std::size_t>(row * chunk_columns_ + column)] !=
+                    0U) {
+                    phase_chunks.emplace_back(column, row);
+                }
+            }
+        }
+        if (phase_chunks.empty()) {
+            continue;
+        }
+
+        const auto workers = std::min({worker_count, phase_chunks.size(), pool.worker_count()});
+        std::vector<TickStats> worker_stats(workers);
+        std::vector<std::vector<Vec2i>> worker_touches(workers);
+
+        const std::function<void(std::size_t)> task = [this, workers, epoch, &phase_chunks,
+                                                        &worker_stats, &worker_touches](
+                                                            std::size_t worker) {
+            parallel_touch_log = &worker_touches[worker];
+            for (std::size_t index = worker; index < phase_chunks.size(); index += workers) {
+                const auto [column, row] = phase_chunks[index];
+                process_chunk_cells(column, row, epoch, worker_stats[worker]);
+            }
+            parallel_touch_log = nullptr;
+        };
+        pool.run(workers, task);
+
+        // Everything below runs single-threaded: safe to call the direct-
+        // write mark_changed/wake_neighborhood again for every logged
+        // position now that no worker is still running.
+        for (const auto& touches : worker_touches) {
+            for (const auto& position : touches) {
+                mark_changed(position);
+            }
+        }
+        for (const auto& worker_stat : worker_stats) {
+            stats.moved_cells += worker_stat.moved_cells;
+            stats.reacted_cells += worker_stat.reacted_cells;
+            stats.heat_transfers += worker_stat.heat_transfers;
+        }
+    }
+
+    finalize_tick(stats, active_at_start);
     return stats;
 }
 
@@ -1073,6 +1289,10 @@ std::uint8_t World::initial_state(MaterialId material_id) const noexcept {
 }
 
 void World::mark_changed(Vec2i position) noexcept {
+    if (parallel_touch_log != nullptr) {
+        parallel_touch_log->push_back(position);
+        return;
+    }
     auto& chunk = chunks_[chunk_index(position)];
     chunk.changed = true;
     chunk.active = true;

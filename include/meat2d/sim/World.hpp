@@ -60,6 +60,25 @@ class World {
     [[nodiscard]] bool line_of_sight(Vec2i origin, Vec2i target) const noexcept;
 
     TickStats step();
+
+    // Chunk-phase-parallel alternative to step(). Groups active chunks into
+    // four phases by (column % 2, row % 2), so no two chunks processed
+    // concurrently within a phase are ever adjacent — not even diagonally —
+    // and barriers between phases. The maximum reach of any single reaction
+    // chain (liquid/gas dispersion, explosions, fire igniting a neighbor
+    // that itself explodes) stays within one chunk's width, so same-phase
+    // chunks never contend for the same cell or chunk metadata. Each worker
+    // accumulates its own TickStats and a private log of touched positions;
+    // both are merged serially between phases, so the merge itself is
+    // single-threaded and race-free. worker_count == 0 uses
+    // std::thread::hardware_concurrency().
+    //
+    // This is a DIFFERENT update-order algorithm from step() — it is not
+    // required to reproduce step()'s exact per-tick outcome, only to be
+    // reproducible run-to-run regardless of thread count. See
+    // docs/ARCHITECTURE.md's "Parallel chunk scheduling" section.
+    TickStats step_parallel(std::size_t worker_count = 0);
+
     void wake_all() noexcept;
     void clear_dirty() noexcept;
 
@@ -113,6 +132,10 @@ class World {
     void wake_neighborhood(Vec2i position) noexcept;
     void reset_update_epochs() noexcept;
     [[nodiscard]] std::uint64_t noise(Vec2i position, std::uint64_t salt) const noexcept;
+
+    void process_chunk_cells(std::int32_t column, std::int32_t row, std::uint8_t epoch,
+                             TickStats& stats);
+    void finalize_tick(TickStats& stats, std::span<const std::uint8_t> active_at_start) noexcept;
 
     WorldConfig config_;
     std::int32_t chunk_columns_{};

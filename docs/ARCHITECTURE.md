@@ -148,6 +148,70 @@ change; ChunkStore is the paging primitive it would be built on, not that
 change itself. Also out of scope here, same as replay: `ai::LivingSimulation`
 agents and `life::OrganismField` state, which a chunk file doesn't capture.
 
+### Parallel chunk scheduling
+
+`step()` is a strictly ordered single scanline over the whole world: bottom
+row to top, each row left-to-right or right-to-left by a per-row noise hash,
+one epoch per tick preventing a cell from being processed twice. Every
+reaction depends on that ordering (rows below already settled, cells earlier
+in the same row already moved) — multithreading it isn't "run the same
+algorithm on more threads", it needs a different, dependency-safe update
+order. `step_parallel` is that order:
+
+Chunks are grouped into four phases by `(column % 2, row % 2)`. Any two
+chunks sharing a phase are at least two chunks apart on some axis, so they
+are never adjacent — not even diagonally. That spacing is safe because every
+reaction's maximum write reach was audited and stays within one chunk's
+width (`chunk_size` = 64): liquid/gas dispersion tops out at 6 cells
+(`explosive_gas`'s dispersion value), a bare explosion's radius tops out at 7
+(`ExplosiveGas` igniting), and the worst chained case — fire igniting an
+adjacent (radius-1) cell that itself explodes at radius 7 — reaches at most
+~8 cells from the processing chunk's boundary. A phase's chunks can
+therefore be processed fully concurrently: no two of them can read or write
+into each other's territory, or race on a shared 1-hop neighbor chunk's
+metadata, within a single phase. `step()`'s per-tick outcome and
+`step_parallel`'s are not required to match each other — they're different
+algorithms — but `step_parallel` is required to (and does, per its tests) be
+byte-identical run-to-run regardless of worker count.
+
+Two hazards this had to solve, both because `Chunk`'s metadata fields
+(`active`, `quiet_ticks`, `changed`, `dirty`) are plain scalars, not atomics:
+
+- **Shared-neighbor races.** Two same-phase chunks two apart (say columns 0
+  and 2) can share a single 1-hop neighbor chunk (column 1) that a boundary
+  reaction from *either* one reaches into. Two threads calling
+  `mark_changed`/`wake_neighborhood` on that shared neighbor concurrently
+  would race on its metadata fields. Fixed by routing `mark_changed` through
+  a `thread_local` pointer: during a parallel phase each worker logs touched
+  positions into its own private vector instead of writing `chunks_`
+  directly (`nullptr` outside a parallel phase falls through to the original
+  direct-write path unchanged, so `step()` is untouched). All workers' logs
+  are merged with a single serial pass — calling the real `mark_changed` for
+  every logged position — between phases, where there's no concurrency left
+  to race. This is provably safe with zero behavior change versus `step()`,
+  not just "hasn't crashed yet": nothing reads live `active`/`dirty`/
+  `changed` mid-scan in either algorithm (`step()`'s scan only ever consults
+  `active_at_start`, a snapshot taken once before any cell is touched), so
+  deferring those writes to the end of the tick changes nothing observable.
+- **Per-worker stats.** `TickStats` is accumulated by reference through
+  `update_cell` and its callees; each worker gets its own local `TickStats`,
+  summed serially after each phase (summation is commutative, so merge order
+  doesn't matter).
+
+Threading itself uses a small persistent worker pool (condition-variable
+barrier, `ChunkWorkerPool` in `World.cpp`, not a public type), sized to
+`std::thread::hardware_concurrency()` once per calling thread and reused
+across `step_parallel` calls — spawning/joining `std::thread` objects fresh
+every phase measured *slower* than `step()` on a 640×360 world (thread
+creation cost dominated the actual per-chunk work); the persistent pool
+turned that into a real win (~20% less wall-clock time on the same
+benchmark, see `benchmarks/simulation_benchmark.cpp`).
+
+`meat2d_server --ticks N --parallel [workers]` is the CLI entry point (the
+authoritative multiplayer server path still uses `step()` via
+`LivingSimulation`, which layers its own per-tick agent/organism processing
+on top and would need its own parallel variant — out of scope here).
+
 ## Determinism
 
 Determinism is tested by executing equal worlds side by side and comparing a
@@ -155,9 +219,10 @@ Determinism is tested by executing equal worlds side by side and comparing a
 gameplay-relevant cell fields. Ephemeral update stamps and chunk scheduling
 metadata are excluded.
 
-Future multithreading will operate on dependency-safe chunk phases and merge
-commands in a stable order. Parallel execution cannot be allowed to select a
-different winner for contested cells.
+Multithreading (`World::step_parallel`, see "Parallel chunk scheduling" below)
+operates on dependency-safe chunk phases so parallel execution never selects
+a different winner for a contested cell — see that section for how phase
+spacing guarantees that.
 
 ## Multiplayer
 
