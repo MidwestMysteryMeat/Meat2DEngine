@@ -38,7 +38,7 @@
 
 ## 0.4 — game creation and packaging
 
-- [ ] Public client/rendering library target
+- [x] Public client/rendering library target
 - [x] `meat2d new` starter-game scaffolder
 - [x] Side-view and top-down starter templates
 - [x] Asset and settings manifests

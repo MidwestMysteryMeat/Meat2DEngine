@@ -106,8 +106,7 @@ int main(int, char**) {
         return 1;
     }
     SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
-    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(game.world().width()) *
-                                     static_cast<std::size_t>(game.world().height()) * 4U);
+    meat2d::render::WorldView view;
 
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
@@ -158,9 +157,20 @@ int main(int, char**) {
             accumulator -= fixed_seconds;
         }
 
-        game.world().rasterize_rgba(pixels);
-        draw_player(pixels, game.world(), player);
-        SDL_UpdateTexture(texture, nullptr, pixels.data(), game.world().width() * 4);
+        mark_player(view, game.world(), player);
+        const auto frame = view.update(
+            game.world(), [&game, player](std::span<std::uint8_t> pixels, meat2d::RectI) {
+                draw_player(pixels, game.world(), player);
+            });
+        if (frame.full_upload) {
+            SDL_UpdateTexture(texture, nullptr, view.pixels().data(), view.pitch_bytes());
+        } else {
+            for (const auto& region : frame.regions) {
+                const SDL_Rect update_rect{region.x, region.y, region.width, region.height};
+                SDL_UpdateTexture(texture, &update_rect, view.region_pixels(region),
+                                  view.pitch_bytes());
+            }
+        }
         SDL_SetRenderDrawColor(renderer, 5, 8, 13, 255);
         SDL_RenderClear(renderer);
         SDL_RenderTexture(renderer, texture, nullptr, nullptr);
