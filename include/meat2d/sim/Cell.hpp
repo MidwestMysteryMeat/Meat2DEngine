@@ -16,7 +16,7 @@ struct Cell {
     MaterialId material{MaterialId::Empty};
     std::uint8_t variant{};
     std::uint8_t updated_epoch{};
-    std::uint8_t flags{};
+    std::uint8_t state{};
     std::int16_t temperature{room_temperature};
     std::int8_t velocity_x{};
     std::int8_t velocity_y{};

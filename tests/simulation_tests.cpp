@@ -30,6 +30,22 @@ void test_cell_layout_and_protocol() {
         "first multiplayer target must remain eight players");
 }
 
+void test_material_catalog() {
+    for (std::size_t index = 0; index < meat2d::material_count; ++index) {
+        const auto material = static_cast<meat2d::MaterialId>(index);
+        const auto& definition = meat2d::material_definition(material);
+        check(meat2d::is_valid(material), "catalog contains an invalid material ID");
+        check(!definition.name.empty(), "catalog contains an unnamed material");
+        check(definition.color.a != 0U, "catalog material is fully transparent");
+    }
+    check(
+        !meat2d::is_valid(meat2d::MaterialId::Count),
+        "Count sentinel must not be a usable material");
+    check(
+        meat2d::has_flag(meat2d::MaterialId::Metal, meat2d::MaterialFlags::Conductive),
+        "metal lost its conductive property");
+}
+
 void test_sand_falls_and_stone_stays() {
     meat2d::World world({
         .width = 64,
@@ -81,6 +97,112 @@ void test_water_conserves_cells() {
     }
     check(water_cells == painted, "water cell count changed while flowing");
     check(lowest_water == 61, "water did not reach the floor");
+}
+
+void test_temperature_phase_changes() {
+    meat2d::World world({
+        .width = 16,
+        .height = 16,
+        .seed = 77,
+        .sleep_after_ticks = 30,
+    });
+
+    meat2d::Cell frozen_water{};
+    frozen_water.material = meat2d::MaterialId::Water;
+    frozen_water.temperature = static_cast<std::int16_t>(-10 * 16);
+    world.set_cell({4, 4}, frozen_water);
+
+    meat2d::Cell boiling_water{};
+    boiling_water.material = meat2d::MaterialId::Water;
+    boiling_water.temperature = static_cast<std::int16_t>(120 * 16);
+    world.set_cell({11, 11}, boiling_water);
+
+    const auto stats = world.step();
+    check(world.material({4, 4}) == meat2d::MaterialId::Ice, "cold water did not freeze");
+    check(
+        world.material({11, 11}) == meat2d::MaterialId::Steam,
+        "boiling water did not become steam");
+    check(stats.reacted_cells == 2, "phase-change reaction count is incorrect");
+}
+
+void test_lava_water_reaction() {
+    meat2d::World world({
+        .width = 16,
+        .height = 16,
+        .seed = 78,
+        .sleep_after_ticks = 30,
+    });
+    world.set_material({7, 8}, meat2d::MaterialId::Lava);
+    world.set_material({8, 8}, meat2d::MaterialId::Water);
+
+    world.step();
+    check(
+        world.material({7, 8}) == meat2d::MaterialId::Obsidian,
+        "lava did not cool into obsidian beside water");
+    std::size_t steam_cells = 0;
+    for (int y = 0; y < world.height(); ++y) {
+        for (int x = 0; x < world.width(); ++x) {
+            if (world.material({x, y}) == meat2d::MaterialId::Steam) {
+                ++steam_cells;
+            }
+        }
+    }
+    check(steam_cells == 1, "water did not flash into steam beside lava");
+}
+
+void test_chemical_and_electrical_reactions() {
+    {
+        meat2d::World world({
+            .width = 16,
+            .height = 16,
+            .seed = 79,
+            .sleep_after_ticks = 30,
+        });
+        world.set_material({7, 7}, meat2d::MaterialId::Acid);
+        world.set_material({8, 7}, meat2d::MaterialId::Stone);
+        world.step();
+        check(
+            world.material({8, 7}) == meat2d::MaterialId::Empty,
+            "acid did not corrode adjacent stone");
+    }
+
+    {
+        meat2d::World world({
+            .width = 16,
+            .height = 16,
+            .seed = 80,
+            .sleep_after_ticks = 30,
+        });
+        world.set_material({7, 7}, meat2d::MaterialId::Metal);
+        world.set_material({8, 7}, meat2d::MaterialId::Electricity);
+        world.step();
+        check(
+            world.material({8, 7}) == meat2d::MaterialId::Empty,
+            "electricity cell was not consumed");
+        check(world.cell({7, 7}).state > 0U, "electricity did not charge adjacent metal");
+    }
+
+    {
+        meat2d::World world({
+            .width = 20,
+            .height = 20,
+            .seed = 81,
+            .sleep_after_ticks = 30,
+        });
+        meat2d::Cell hot_powder{};
+        hot_powder.material = meat2d::MaterialId::Gunpowder;
+        hot_powder.temperature = static_cast<std::int16_t>(300 * 16);
+        world.set_cell({10, 10}, hot_powder);
+        world.set_material({11, 10}, meat2d::MaterialId::Wood);
+        const auto stats = world.step();
+        check(
+            world.material({10, 10}) == meat2d::MaterialId::Fire,
+            "hot gunpowder did not explode");
+        check(
+            world.material({11, 10}) == meat2d::MaterialId::Fire,
+            "explosion did not ignite nearby wood");
+        check(stats.reacted_cells >= 2, "explosion did not report its reactions");
+    }
 }
 
 void test_cross_chunk_motion() {
@@ -161,8 +283,12 @@ void test_raster_output() {
 int main() {
     try {
         test_cell_layout_and_protocol();
+        test_material_catalog();
         test_sand_falls_and_stone_stays();
         test_water_conserves_cells();
+        test_temperature_phase_changes();
+        test_lava_water_reaction();
+        test_chemical_and_electrical_reactions();
         test_cross_chunk_motion();
         test_determinism();
         test_chunks_sleep();

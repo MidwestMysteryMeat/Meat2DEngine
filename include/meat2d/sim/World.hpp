@@ -20,6 +20,8 @@ struct WorldConfig {
 struct TickStats {
     Tick tick{};
     std::uint64_t moved_cells{};
+    std::uint64_t reacted_cells{};
+    std::uint64_t heat_transfers{};
     std::uint32_t changed_chunks{};
     std::uint32_t active_chunks{};
     std::uint32_t sleeping_chunks{};
@@ -60,6 +62,23 @@ class World {
 
     void update_cell(Vec2i position, std::uint8_t epoch, TickStats& stats);
     bool try_move(Vec2i from, Vec2i to, std::uint8_t epoch, TickStats& stats);
+    bool transform_cell(
+        Vec2i position,
+        MaterialId material,
+        std::uint8_t epoch,
+        TickStats& stats,
+        bool preserve_temperature);
+    bool apply_phase_change(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void exchange_heat(Vec2i position, TickStats& stats);
+    void update_fire(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void update_acid(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void update_lava(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void update_plant(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void update_electricity(Vec2i position, std::uint8_t epoch, TickStats& stats);
+    void update_charged_metal(Vec2i position, std::uint8_t epoch);
+    void explode(Vec2i center, std::int32_t radius, std::uint8_t epoch, TickStats& stats);
+    [[nodiscard]] bool has_neighbor(Vec2i position, MaterialId material) const noexcept;
+    [[nodiscard]] std::uint8_t initial_state(MaterialId material) const noexcept;
     void mark_changed(Vec2i position) noexcept;
     void wake_neighborhood(Vec2i position) noexcept;
     void reset_update_epochs() noexcept;

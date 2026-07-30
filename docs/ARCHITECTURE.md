@@ -39,7 +39,7 @@ Each cell contains:
 - Stable material ID
 - Visual variant
 - One-byte update epoch
-- Flags
+- One-byte material state used for lifetime, potency, growth, or electric charge
 - Fixed-point temperature in sixteenths of a degree Celsius
 - Small signed X/Y velocity channels
 
@@ -64,6 +64,19 @@ permanent directional bias without consuming mutable random-generator state.
 
 An update epoch prevents a moved cell from being processed twice in one tick.
 Epoch bytes are reset every 255 ticks to make wraparound explicit.
+
+### Materials and reactions
+
+Material IDs are explicit serialized values and are append-only. Definitions
+provide phase, density, dispersion, thermal conductivity, default and ignition
+temperatures, blast resistance, and behavior flags.
+
+Each active non-empty cell samples a deterministic cardinal heat exchange,
+evaluates phase and ignition thresholds, runs its material-specific reaction,
+then attempts phase-appropriate movement. Granular and liquid cells move with
+gravity, gases rise, and density controls displacement. Reactions use only
+integer and fixed-point state. See [MATERIALS.md](MATERIALS.md) for the current
+catalog and interaction rules.
 
 ## Determinism
 

@@ -5,8 +5,8 @@ Its target space sits between falling-sand games, Terraria-like sandboxes,
 Worms-like terrain destruction, and multiplayer side-view or top-down shooters.
 
 The project is intentionally early. The first working slice is a deterministic
-side-view sand laboratory. Networking, AI, reactions, game templates, and
-one-command packaging are being built on top of the same authoritative state.
+side-view elements laboratory. Networking, AI, game templates, and one-command
+packaging are being built on top of the same authoritative state.
 
 ## Current capabilities
 
@@ -15,9 +15,12 @@ one-command packaging are being built on top of the same authoritative state.
 - 64×64 chunks with active/sleeping states, dirty bounds, and revisions
 - Eight-byte cells suitable for large worlds and network deltas
 - Stable serialized material IDs
-- Sand, water, stone, and empty-space behavior
+- 25 stable materials spanning granular, liquid, gas, solid, and energy phases
+- Fixed-point heat transfer, freezing, melting, boiling, and condensation
+- Fire, smoke, steam, oil, wood, acid corrosion, lava cooling, electricity,
+  plant growth, and deterministic explosions
 - Seeded traversal that avoids a permanent left/right bias
-- Interactive SDL3 sand laboratory
+- Interactive SDL3 elements laboratory with the complete paintable catalog
 - Headless simulation/server target
 - State hashing, unit tests, cross-chunk tests, and a benchmark
 - Versioned packet header reserved for authoritative 2–8 player networking
@@ -57,7 +60,7 @@ Run:
 On a multi-config generator, executables may be under a `Debug` or `Release`
 subdirectory.
 
-## Sand-lab controls
+## Elements-lab controls
 
 | Input | Action |
 | --- | --- |
@@ -68,6 +71,13 @@ subdirectory.
 | `1` | Select sand |
 | `2` | Select water |
 | `3` | Select stone |
+| `4` | Select wood |
+| `5` | Select oil |
+| `6` | Select fire |
+| `7` | Select acid |
+| `8` | Select lava |
+| `9` | Select gunpowder |
+| `Q` / `E` | Select previous/next material in the full catalog |
 | `Space` | Pause |
 | `N` | Advance one tick |
 | `R` | Reset the laboratory |
@@ -134,7 +144,8 @@ src/             engine implementation
 tests/           unit and determinism tests
 ```
 
-See [Architecture](docs/ARCHITECTURE.md) and [Roadmap](docs/ROADMAP.md).
+See [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
+[Roadmap](docs/ROADMAP.md).
 
 ## License
 

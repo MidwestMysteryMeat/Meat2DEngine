@@ -11,13 +11,13 @@
 - [x] Interactive SDL3 lab and headless target
 - [x] Tests and baseline benchmark
 - [x] Initial install/CPack support
-- [ ] Expanded element and reaction set
+- [x] Expanded element and reaction set
 - [ ] Dirty-region texture uploads
 
 ## 0.2 — living laboratory
 
-- [ ] Temperature transfer and phase changes
-- [ ] Fire, smoke, steam, oil, wood, metal, acid, and plant life
+- [x] Temperature transfer and phase changes
+- [x] Fire, smoke, steam, oil, wood, metal, acid, and plant life
 - [ ] Utility-driven embodied agents
 - [ ] Cellular organisms with reproduction and mutation
 - [ ] Deterministic entity command buffer

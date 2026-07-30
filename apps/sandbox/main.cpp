@@ -61,6 +61,12 @@ const char* material_name(meat2d::MaterialId id) {
     return meat2d::material_definition(id).name.data();
 }
 
+meat2d::MaterialId cycle_material(meat2d::MaterialId current, int direction) {
+    const auto count = static_cast<int>(meat2d::material_count);
+    const auto current_index = static_cast<int>(current);
+    return static_cast<meat2d::MaterialId>((current_index + direction + count) % count);
+}
+
 std::uint64_t parse_frame_limit(int argc, char** argv) {
     std::uint64_t frame_limit = 0;
     for (int index = 1; index + 1 < argc; ++index) {
@@ -108,7 +114,7 @@ int main(int argc, char** argv) {
         .sleep_after_ticks = 30,
     };
     meat2d::World world(world_config);
-    meat2d::seed_sand_lab(world);
+    meat2d::seed_elements_lab(world);
 
     SDL_Texture* texture = SDL_CreateTexture(
         renderer,
@@ -170,9 +176,33 @@ int main(int argc, char** argv) {
                 case SDLK_3:
                     brush = meat2d::MaterialId::Stone;
                     break;
+                case SDLK_4:
+                    brush = meat2d::MaterialId::Wood;
+                    break;
+                case SDLK_5:
+                    brush = meat2d::MaterialId::Oil;
+                    break;
+                case SDLK_6:
+                    brush = meat2d::MaterialId::Fire;
+                    break;
+                case SDLK_7:
+                    brush = meat2d::MaterialId::Acid;
+                    break;
+                case SDLK_8:
+                    brush = meat2d::MaterialId::Lava;
+                    break;
+                case SDLK_9:
+                    brush = meat2d::MaterialId::Gunpowder;
+                    break;
+                case SDLK_Q:
+                    brush = cycle_material(brush, -1);
+                    break;
+                case SDLK_E:
+                    brush = cycle_material(brush, 1);
+                    break;
                 case SDLK_R:
                     world = meat2d::World(world_config);
-                    meat2d::seed_sand_lab(world);
+                    meat2d::seed_elements_lab(world);
                     break;
                 case SDLK_C:
                     world = meat2d::World(world_config);
@@ -234,6 +264,8 @@ int main(int argc, char** argv) {
                 (paused ? " | PAUSED" : "") +
                 " | tick " + std::to_string(world.current_tick()) +
                 " | moved " + std::to_string(last_stats.moved_cells) +
+                " | reacted " + std::to_string(last_stats.reacted_cells) +
+                " | heat " + std::to_string(last_stats.heat_transfers) +
                 " | active chunks " + std::to_string(last_stats.active_chunks);
             SDL_SetWindowTitle(window, title.c_str());
         }
