@@ -18,6 +18,8 @@ option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_library(
     meat2d_core
+    src/ai/LivingSimulation.cpp
+    src/life/OrganismField.cpp
     src/sim/Material.cpp
     src/sim/Scenario.cpp
     src/sim/World.cpp

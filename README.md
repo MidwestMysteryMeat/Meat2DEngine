@@ -19,6 +19,11 @@ packaging are being built on top of the same authoritative state.
 - Fixed-point heat transfer, freezing, melting, boiling, and condensation
 - Fire, smoke, steam, oil, wood, acid corrosion, lava cooling, electricity,
   plant growth, and deterministic explosions
+- Tick-ordered entity command buffer shared by autonomous and external control
+- Utility-driven grazers, predators, and workers with needs, danger response,
+  resource use, combat, hauling, construction, and reproduction
+- Eight-byte cellular organisms with encoded traits, metabolism, environmental
+  fitness, motility, digestion, reproduction, and mutation
 - Seeded traversal that avoids a permanent left/right bias
 - Interactive SDL3 elements laboratory with the complete paintable catalog
 - Headless simulation/server target
@@ -66,6 +71,7 @@ subdirectory.
 | --- | --- |
 | Left mouse | Paint the selected material |
 | Right mouse | Erase |
+| Middle mouse | Seed the selected cellular organism |
 | Mouse wheel | Change brush radius |
 | `0` | Select empty/eraser |
 | `1` | Select sand |
@@ -78,6 +84,9 @@ subdirectory.
 | `8` | Select lava |
 | `9` | Select gunpowder |
 | `Q` / `E` | Select previous/next material in the full catalog |
+| `Z` | Select photosynthetic organisms |
+| `X` | Select decomposer organisms |
+| `V` | Select extremophile organisms |
 | `Space` | Pause |
 | `N` | Advance one tick |
 | `R` | Reset the laboratory |
@@ -134,7 +143,7 @@ will not be trusted merely because deterministic replay is available.
 
 ```text
 apps/
-  sandbox/       SDL3 interactive laboratory
+  sandbox/       SDL3 interactive living laboratory
   server/        headless authoritative simulation target
 benchmarks/      simulation throughput checks
 cmake/           installed-package configuration
@@ -144,8 +153,8 @@ src/             engine implementation
 tests/           unit and determinism tests
 ```
 
-See [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
-[Roadmap](docs/ROADMAP.md).
+See [AI and Life](docs/AI_AND_LIFE.md), [Materials](docs/MATERIALS.md),
+[Architecture](docs/ARCHITECTURE.md), and [Roadmap](docs/ROADMAP.md).
 
 ## License
 

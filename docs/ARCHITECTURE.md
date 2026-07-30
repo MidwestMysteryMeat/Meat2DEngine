@@ -108,15 +108,23 @@ contract.
 
 ## AI direction
 
-Two AI scales will share the same world:
+Two AI scales share the same world:
 
 - Embodied utility agents perceive nearby material, danger, resources, and
   reachable cells, then emit ordinary world/entity commands.
 - Cellular organisms use compact state and local rules for consumption,
   reproduction, mutation, and environmental response.
 
-AI will not receive mutable access to world storage. This preserves command
-ordering, replay, and server authority.
+Embodied agents never receive mutable world storage. Their planned actions
+enter the same command buffer used by external controllers. Commands are
+ordered by target tick, issuer, sequence, type, and target before validation
+and application. An external command for an agent suppresses autonomous
+planning for that tick, which creates a clean handoff for players or servers.
+
+Cellular organisms use a synchronous double-buffered field. Each occupied
+position carries an eight-byte genome/energy/age record. Alternating traversal
+and coordinate/tick noise reduce directional bias without compromising replay.
+See [AI_AND_LIFE.md](AI_AND_LIFE.md).
 
 ## Rendering
 
@@ -124,8 +132,9 @@ The first renderer writes the world to an RGBA streaming texture and lets SDL3
 scale it with nearest-neighbor sampling. This is intentionally simple and keeps
 simulation work measurable.
 
-Later rendering can upload only dirty chunk regions and add sprite/entity
-passes without changing the cell-state API.
+The living lab overlays cellular organisms and embodied agents after the
+material raster. Later rendering can upload only dirty chunk regions and add
+sprite/entity passes without changing the cell-state API.
 
 ## Packaging
 

@@ -18,10 +18,10 @@
 
 - [x] Temperature transfer and phase changes
 - [x] Fire, smoke, steam, oil, wood, metal, acid, and plant life
-- [ ] Utility-driven embodied agents
-- [ ] Cellular organisms with reproduction and mutation
-- [ ] Deterministic entity command buffer
-- [ ] Agent perception and grid pathing
+- [x] Utility-driven embodied agents
+- [x] Cellular organisms with reproduction and mutation
+- [x] Deterministic entity command buffer
+- [x] Agent perception and local terrain movement
 
 ## 0.3 — authoritative multiplayer
 

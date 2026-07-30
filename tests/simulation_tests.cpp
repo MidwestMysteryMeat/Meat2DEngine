@@ -1,3 +1,4 @@
+#include "meat2d/ai/LivingSimulation.hpp"
 #include "meat2d/net/Protocol.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
@@ -23,6 +24,9 @@ void check(bool condition, const std::string& message) {
 void test_cell_layout_and_protocol() {
     check(sizeof(meat2d::Cell) == 8, "authoritative cell must remain eight bytes");
     check(
+        sizeof(meat2d::life::OrganismCell) == 8,
+        "authoritative organism cell must remain eight bytes");
+    check(
         sizeof(meat2d::net::PacketHeader) == 28,
         "network header layout unexpectedly changed");
     check(
@@ -44,6 +48,76 @@ void test_material_catalog() {
     check(
         meat2d::has_flag(meat2d::MaterialId::Metal, meat2d::MaterialFlags::Conductive),
         "metal lost its conductive property");
+}
+
+void test_organism_genome_and_ecology() {
+    const meat2d::life::OrganismTraits expected{
+        .photosynthesis = 12,
+        .digestion = 13,
+        .motility = 9,
+        .reproduction = 8,
+        .heat_preference = 4,
+        .resilience = 11,
+        .mutation = 7,
+        .pigment = 5,
+    };
+    const auto decoded =
+        meat2d::life::decode_traits(meat2d::life::encode_traits(expected));
+    check(decoded.photosynthesis == expected.photosynthesis, "photosynthesis gene changed");
+    check(decoded.digestion == expected.digestion, "digestion gene changed");
+    check(decoded.motility == expected.motility, "motility gene changed");
+    check(decoded.reproduction == expected.reproduction, "reproduction gene changed");
+    check(
+        decoded.heat_preference == expected.heat_preference,
+        "heat-preference gene changed");
+    check(decoded.resilience == expected.resilience, "resilience gene changed");
+    check(decoded.mutation == expected.mutation, "mutation gene changed");
+    check(decoded.pigment == expected.pigment, "pigment gene changed");
+
+    meat2d::ai::LivingSimulation simulation({
+        .width = 32,
+        .height = 24,
+        .seed = 87,
+        .sleep_after_ticks = 30,
+    });
+    simulation.world().set_material({12, 12}, meat2d::MaterialId::Plant);
+    const bool seeded = simulation.organisms().seed(
+        {12, 12},
+        meat2d::life::decomposer_genome,
+        1'500);
+    check(seeded, "cellular organism failed to seed");
+    const auto stats = simulation.step();
+    check(stats.organisms.consumed_cells == 1, "decomposer did not consume plant matter");
+    check(
+        simulation.world().material({12, 12}) == meat2d::MaterialId::Empty,
+        "consumed plant matter remained in the material field");
+}
+
+void test_organism_determinism_and_reproduction() {
+    meat2d::ai::LivingSimulation first({
+        .width = 48,
+        .height = 32,
+        .seed = 88,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::ai::LivingSimulation second({
+        .width = 48,
+        .height = 32,
+        .seed = 88,
+        .sleep_after_ticks = 30,
+    });
+    first.organisms().seed({24, 16}, meat2d::life::photosynthetic_genome, 1'400);
+    second.organisms().seed({24, 16}, meat2d::life::photosynthetic_genome, 1'400);
+
+    for (int tick = 0; tick < 180; ++tick) {
+        first.step();
+        second.step();
+        check(first.state_hash() == second.state_hash(), "organism fields diverged");
+        if (failures != 0) {
+            return;
+        }
+    }
+    check(first.organisms().population() > 1U, "organisms did not reproduce");
 }
 
 void test_sand_falls_and_stone_stays() {
@@ -205,6 +279,190 @@ void test_chemical_and_electrical_reactions() {
     }
 }
 
+void add_floor(meat2d::ai::LivingSimulation& simulation, int y) {
+    for (int x = 0; x < simulation.world().width(); ++x) {
+        simulation.world().set_material({x, y}, meat2d::MaterialId::Stone);
+    }
+}
+
+void test_tick_ordered_entity_commands() {
+    meat2d::ai::LivingSimulation simulation({
+        .width = 16,
+        .height = 16,
+        .seed = 82,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::ai::LivingSimulation reversed({
+        .width = 16,
+        .height = 16,
+        .seed = 82,
+        .sleep_after_ticks = 30,
+    });
+    const bool queued = simulation.queue_command({
+        .target_tick = 1,
+        .issuer = meat2d::ai::world_issuer,
+        .sequence = 7,
+        .type = meat2d::ai::CommandType::Paint,
+        .target = {4, 5},
+        .material = meat2d::MaterialId::Concrete,
+    });
+    simulation.queue_command({
+        .target_tick = 1,
+        .issuer = meat2d::ai::world_issuer,
+        .sequence = 9,
+        .type = meat2d::ai::CommandType::Paint,
+        .target = {7, 5},
+        .material = meat2d::MaterialId::Wood,
+    });
+    reversed.queue_command({
+        .target_tick = 1,
+        .issuer = meat2d::ai::world_issuer,
+        .sequence = 9,
+        .type = meat2d::ai::CommandType::Paint,
+        .target = {7, 5},
+        .material = meat2d::MaterialId::Wood,
+    });
+    reversed.queue_command({
+        .target_tick = 1,
+        .issuer = meat2d::ai::world_issuer,
+        .sequence = 7,
+        .type = meat2d::ai::CommandType::Paint,
+        .target = {4, 5},
+        .material = meat2d::MaterialId::Concrete,
+    });
+    check(queued, "valid future world command was rejected");
+    check(
+        simulation.state_hash() == reversed.state_hash(),
+        "command enqueue order changed authoritative state");
+    const auto stats = simulation.step();
+    reversed.step();
+    check(stats.applied_commands == 2, "queued world commands were not applied");
+    check(
+        simulation.world().material({4, 5}) == meat2d::MaterialId::Concrete,
+        "tick-ordered paint command changed the wrong cell");
+}
+
+void test_grazer_predator_and_worker_ai() {
+    {
+        meat2d::ai::LivingSimulation simulation({
+            .width = 20,
+            .height = 16,
+            .seed = 83,
+            .sleep_after_ticks = 30,
+        });
+        add_floor(simulation, 10);
+        simulation.world().set_material({6, 9}, meat2d::MaterialId::Plant);
+        const auto grazer =
+            simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {5, 9});
+        simulation.step();
+        check(grazer != 0, "grazer failed to spawn");
+        check(
+            simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
+            "grazer did not consume adjacent plant life");
+        check(
+            simulation.find_agent(grazer) != nullptr &&
+                simulation.find_agent(grazer)->action == meat2d::ai::AgentAction::Eat,
+            "grazer did not report its eat action");
+    }
+
+    {
+        meat2d::ai::LivingSimulation simulation({
+            .width = 20,
+            .height = 16,
+            .seed = 84,
+            .sleep_after_ticks = 30,
+        });
+        add_floor(simulation, 10);
+        simulation.spawn_agent(meat2d::ai::AgentKind::Predator, {5, 9});
+        const auto grazer =
+            simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {6, 9});
+        simulation.step();
+        check(
+            simulation.find_agent(grazer) != nullptr &&
+                simulation.find_agent(grazer)->health == 75U,
+            "predator did not damage adjacent prey");
+    }
+
+    {
+        meat2d::ai::LivingSimulation simulation({
+            .width = 20,
+            .height = 16,
+            .seed = 85,
+            .sleep_after_ticks = 30,
+        });
+        add_floor(simulation, 10);
+        simulation.world().set_material({6, 9}, meat2d::MaterialId::Debris);
+        const auto worker =
+            simulation.spawn_agent(meat2d::ai::AgentKind::Worker, {5, 9});
+        simulation.step();
+        check(
+            simulation.find_agent(worker) != nullptr &&
+                simulation.find_agent(worker)->carried == meat2d::MaterialId::Debris,
+            "worker did not collect adjacent debris");
+        check(
+            simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
+            "worker did not remove collected debris");
+
+        simulation.queue_command({
+            .target_tick = 2,
+            .issuer = worker,
+            .sequence = 1,
+            .type = meat2d::ai::CommandType::Place,
+            .target = {4, 9},
+            .material = meat2d::MaterialId::Debris,
+        });
+        simulation.step();
+        check(
+            simulation.world().material({4, 9}) == meat2d::MaterialId::Debris,
+            "worker did not place its carried material");
+    }
+}
+
+void test_living_simulation_determinism() {
+    meat2d::ai::LivingSimulation first({
+        .width = 96,
+        .height = 64,
+        .seed = 86,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::ai::LivingSimulation second({
+        .width = 96,
+        .height = 64,
+        .seed = 86,
+        .sleep_after_ticks = 30,
+    });
+    add_floor(first, 58);
+    add_floor(second, 58);
+    for (int x = 12; x < 36; x += 4) {
+        first.world().set_material({x, 57}, meat2d::MaterialId::Plant);
+        second.world().set_material({x, 57}, meat2d::MaterialId::Plant);
+    }
+    for (int x = 55; x < 70; x += 3) {
+        first.world().set_material({x, 57}, meat2d::MaterialId::Debris);
+        second.world().set_material({x, 57}, meat2d::MaterialId::Debris);
+    }
+
+    for (const auto position : {meat2d::Vec2i{8, 57}, meat2d::Vec2i{20, 57}}) {
+        first.spawn_agent(meat2d::ai::AgentKind::Grazer, position);
+        second.spawn_agent(meat2d::ai::AgentKind::Grazer, position);
+    }
+    first.spawn_agent(meat2d::ai::AgentKind::Predator, {42, 57});
+    second.spawn_agent(meat2d::ai::AgentKind::Predator, {42, 57});
+    first.spawn_agent(meat2d::ai::AgentKind::Worker, {75, 57});
+    second.spawn_agent(meat2d::ai::AgentKind::Worker, {75, 57});
+
+    for (int tick = 0; tick < 240; ++tick) {
+        first.step();
+        second.step();
+        check(
+            first.state_hash() == second.state_hash(),
+            "equal living simulations diverged");
+        if (failures != 0) {
+            return;
+        }
+    }
+}
+
 void test_cross_chunk_motion() {
     meat2d::World world({
         .width = 128,
@@ -283,12 +541,17 @@ void test_raster_output() {
 int main() {
     try {
         test_cell_layout_and_protocol();
+        test_organism_genome_and_ecology();
+        test_organism_determinism_and_reproduction();
         test_material_catalog();
         test_sand_falls_and_stone_stays();
         test_water_conserves_cells();
         test_temperature_phase_changes();
         test_lava_water_reaction();
         test_chemical_and_electrical_reactions();
+        test_tick_ordered_entity_commands();
+        test_grazer_predator_and_worker_ai();
+        test_living_simulation_determinism();
         test_cross_chunk_motion();
         test_determinism();
         test_chunks_sleep();

@@ -1,3 +1,4 @@
+#include "meat2d/ai/LivingSimulation.hpp"
 #include "meat2d/core/Version.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
@@ -83,11 +84,146 @@ std::uint64_t parse_frame_limit(int argc, char** argv) {
     return frame_limit;
 }
 
+void seed_living_lab(meat2d::ai::LivingSimulation& simulation) {
+    auto& world = simulation.world();
+    meat2d::seed_elements_lab(world);
+
+    const auto floor_y = world.height() - std::max(4, world.height() / 18);
+    for (int x = world.width() / 4; x < world.width() * 2 / 5; x += 12) {
+        world.set_material({x, floor_y - 1}, meat2d::MaterialId::Plant);
+    }
+    for (int x = world.width() * 7 / 10; x < world.width() * 4 / 5; x += 4) {
+        world.set_material({x, floor_y - 1}, meat2d::MaterialId::Debris);
+    }
+
+    simulation.spawn_agent(
+        meat2d::ai::AgentKind::Grazer,
+        {world.width() / 4 - 7, floor_y - 1});
+    simulation.spawn_agent(
+        meat2d::ai::AgentKind::Grazer,
+        {world.width() / 3, floor_y - 2});
+    simulation.spawn_agent(
+        meat2d::ai::AgentKind::Predator,
+        {world.width() / 2 - 12, floor_y - 1});
+    simulation.spawn_agent(
+        meat2d::ai::AgentKind::Worker,
+        {world.width() * 2 / 3, floor_y - 1});
+
+    for (std::int32_t y = floor_y - 8; y <= floor_y - 4; ++y) {
+        for (std::int32_t x = world.width() / 10; x <= world.width() / 10 + 6; ++x) {
+            simulation.organisms().seed(
+                {x, y},
+                meat2d::life::photosynthetic_genome,
+                1'100);
+        }
+    }
+    for (std::int32_t y = floor_y - 5; y <= floor_y - 2; ++y) {
+        for (std::int32_t x = world.width() / 3; x <= world.width() / 3 + 5; ++x) {
+            simulation.organisms().seed(
+                {x, y},
+                meat2d::life::decomposer_genome,
+                1'100);
+        }
+    }
+}
+
+meat2d::Rgba8 agent_color(meat2d::ai::AgentKind kind) {
+    switch (kind) {
+    case meat2d::ai::AgentKind::Grazer:
+        return {93, 238, 115, 255};
+    case meat2d::ai::AgentKind::Predator:
+        return {255, 62, 72, 255};
+    case meat2d::ai::AgentKind::Worker:
+        return {255, 207, 64, 255};
+    }
+    return {255, 255, 255, 255};
+}
+
+void rasterize_agents(
+    const meat2d::ai::LivingSimulation& simulation,
+    std::vector<std::uint8_t>& pixels) {
+    const auto& world = simulation.world();
+    for (const auto& agent : simulation.agents()) {
+        const auto color = agent_color(agent.kind);
+        for (std::int32_t y = agent.position.y - 1; y <= agent.position.y + 1; ++y) {
+            for (std::int32_t x = agent.position.x - 1; x <= agent.position.x + 1; ++x) {
+                if (!world.in_bounds({x, y})) {
+                    continue;
+                }
+                const auto offset =
+                    (static_cast<std::size_t>(y) * static_cast<std::size_t>(world.width()) +
+                     static_cast<std::size_t>(x)) *
+                    4U;
+                pixels[offset] = color.r;
+                pixels[offset + 1U] = color.g;
+                pixels[offset + 2U] = color.b;
+                pixels[offset + 3U] = color.a;
+            }
+        }
+    }
+}
+
+void rasterize_organisms(
+    const meat2d::ai::LivingSimulation& simulation,
+    std::vector<std::uint8_t>& pixels) {
+    const auto& field = simulation.organisms();
+    const auto cells = field.cells();
+    for (std::int32_t y = 0; y < field.height(); ++y) {
+        for (std::int32_t x = 0; x < field.width(); ++x) {
+            const auto index =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(field.width()) +
+                static_cast<std::size_t>(x);
+            const auto& organism = cells[index];
+            if (organism.genome == 0U) {
+                continue;
+            }
+            const auto color = field.color(organism);
+            const auto pixel = index * 4U;
+            pixels[pixel] =
+                static_cast<std::uint8_t>((static_cast<int>(pixels[pixel]) + color.r * 2) / 3);
+            pixels[pixel + 1U] = static_cast<std::uint8_t>(
+                (static_cast<int>(pixels[pixel + 1U]) + color.g * 2) / 3);
+            pixels[pixel + 2U] = static_cast<std::uint8_t>(
+                (static_cast<int>(pixels[pixel + 2U]) + color.b * 2) / 3);
+        }
+    }
+}
+
+const char* organism_name(std::uint32_t genome) {
+    if (genome == meat2d::life::photosynthetic_genome) {
+        return "photosynthetic";
+    }
+    if (genome == meat2d::life::decomposer_genome) {
+        return "decomposer";
+    }
+    return "extremophile";
+}
+
+void seed_organism_brush(
+    meat2d::life::OrganismField& field,
+    meat2d::Vec2i center,
+    int radius,
+    std::uint32_t genome) {
+    const auto radius_squared = radius * radius;
+    for (std::int32_t y = center.y - radius; y <= center.y + radius; ++y) {
+        for (std::int32_t x = center.x - radius; x <= center.x + radius; ++x) {
+            const auto dx = x - center.x;
+            const auto dy = y - center.y;
+            if (dx * dx + dy * dy <= radius_squared) {
+                field.seed({x, y}, genome, 1'100);
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     const auto frame_limit = parse_frame_limit(argc, argv);
-    SDL_SetAppMetadata("Meat2D Sand Lab", meat2d::version_string.data(), "games.meat2d.sandbox");
+    SDL_SetAppMetadata(
+        "Meat2D Living Lab",
+        meat2d::version_string.data(),
+        "games.meat2d.sandbox");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         std::fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
         return 1;
@@ -96,7 +232,7 @@ int main(int argc, char** argv) {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     if (!SDL_CreateWindowAndRenderer(
-            "Meat2D Sand Lab",
+            "Meat2D Living Lab",
             1280,
             720,
             SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY,
@@ -113,15 +249,17 @@ int main(int argc, char** argv) {
         .seed = 0x4D4541543244ULL,
         .sleep_after_ticks = 30,
     };
-    meat2d::World world(world_config);
-    meat2d::seed_elements_lab(world);
+    meat2d::ai::LivingSimulation simulation(world_config);
+    seed_living_lab(simulation);
+    const auto world_width = simulation.world().width();
+    const auto world_height = simulation.world().height();
 
     SDL_Texture* texture = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_RGBA32,
         SDL_TEXTUREACCESS_STREAMING,
-        world.width(),
-        world.height());
+        world_width,
+        world_height);
     if (texture == nullptr) {
         std::fprintf(stderr, "Texture creation failed: %s\n", SDL_GetError());
         SDL_DestroyRenderer(renderer);
@@ -133,15 +271,16 @@ int main(int argc, char** argv) {
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
 
     std::vector<std::uint8_t> pixels(
-        static_cast<std::size_t>(world.width()) *
-        static_cast<std::size_t>(world.height()) * 4U);
+        static_cast<std::size_t>(world_width) *
+        static_cast<std::size_t>(world_height) * 4U);
 
     bool running = true;
     bool paused = false;
     bool single_step = false;
     int brush_radius = 5;
     meat2d::MaterialId brush = meat2d::MaterialId::Sand;
-    meat2d::TickStats last_stats{};
+    std::uint32_t organism_brush = meat2d::life::photosynthetic_genome;
+    meat2d::ai::LivingStats last_stats{};
 
     auto previous = std::chrono::steady_clock::now();
     auto title_update = previous;
@@ -200,13 +339,22 @@ int main(int argc, char** argv) {
                 case SDLK_E:
                     brush = cycle_material(brush, 1);
                     break;
+                case SDLK_Z:
+                    organism_brush = meat2d::life::photosynthetic_genome;
+                    break;
+                case SDLK_X:
+                    organism_brush = meat2d::life::decomposer_genome;
+                    break;
+                case SDLK_V:
+                    organism_brush = meat2d::life::extremophile_genome;
+                    break;
                 case SDLK_R:
-                    world = meat2d::World(world_config);
-                    meat2d::seed_elements_lab(world);
+                    simulation = meat2d::ai::LivingSimulation(world_config);
+                    seed_living_lab(simulation);
                     break;
                 case SDLK_C:
-                    world = meat2d::World(world_config);
-                    world.wake_all();
+                    simulation = meat2d::ai::LivingSimulation(world_config);
+                    simulation.world().wake_all();
                     break;
                 default:
                     break;
@@ -225,6 +373,7 @@ int main(int argc, char** argv) {
         previous = now;
         accumulator += std::min(frame_seconds, 0.25);
 
+        auto& world = simulation.world();
         const auto viewport = calculate_viewport(renderer, world);
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
@@ -234,10 +383,16 @@ int main(int argc, char** argv) {
             world.paint_disc(mouse_cell, brush_radius, brush);
         } else if ((mouse_buttons & SDL_BUTTON_RMASK) != 0U) {
             world.paint_disc(mouse_cell, brush_radius, meat2d::MaterialId::Empty);
+        } else if ((mouse_buttons & SDL_BUTTON_MMASK) != 0U) {
+            seed_organism_brush(
+                simulation.organisms(),
+                mouse_cell,
+                std::max(1, brush_radius / 2),
+                organism_brush);
         }
 
         while ((accumulator >= fixed_seconds && !paused) || single_step) {
-            last_stats = world.step();
+            last_stats = simulation.step();
             accumulator = std::max(0.0, accumulator - fixed_seconds);
             single_step = false;
             if (paused) {
@@ -246,6 +401,8 @@ int main(int argc, char** argv) {
         }
 
         world.rasterize_rgba(pixels);
+        rasterize_organisms(simulation, pixels);
+        rasterize_agents(simulation, pixels);
         SDL_UpdateTexture(texture, nullptr, pixels.data(), world.width() * 4);
         SDL_SetRenderDrawColor(renderer, 5, 7, 12, 255);
         SDL_RenderClear(renderer);
@@ -259,14 +416,18 @@ int main(int argc, char** argv) {
         if (now - title_update >= std::chrono::milliseconds(250)) {
             title_update = now;
             const std::string title =
-                "Meat2D Sand Lab | " + std::string(material_name(brush)) +
+                "Meat2D Living Lab | " + std::string(material_name(brush)) +
+                " | microbe " + organism_name(organism_brush) +
                 " r=" + std::to_string(brush_radius) +
                 (paused ? " | PAUSED" : "") +
                 " | tick " + std::to_string(world.current_tick()) +
-                " | moved " + std::to_string(last_stats.moved_cells) +
-                " | reacted " + std::to_string(last_stats.reacted_cells) +
-                " | heat " + std::to_string(last_stats.heat_transfers) +
-                " | active chunks " + std::to_string(last_stats.active_chunks);
+                " | agents " + std::to_string(simulation.agents().size()) +
+                " | organisms " +
+                std::to_string(simulation.organisms().population()) +
+                " | moved " + std::to_string(last_stats.world.moved_cells) +
+                " | reacted " + std::to_string(last_stats.world.reacted_cells) +
+                " | commands " + std::to_string(last_stats.applied_commands) +
+                " | active chunks " + std::to_string(last_stats.world.active_chunks);
             SDL_SetWindowTitle(window, title.c_str());
         }
 
