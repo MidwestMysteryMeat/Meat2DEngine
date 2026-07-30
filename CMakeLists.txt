@@ -14,6 +14,7 @@ option(MEAT2D_BUILD_CLIENT "Build the SDL3 interactive sandbox" ON)
 option(MEAT2D_BUILD_SERVER "Build the headless simulation server" ON)
 option(MEAT2D_BUILD_REMOTE_CLIENT "Build the headless multiplayer client" ON)
 option(MEAT2D_BUILD_DIRECTORY "Build the self-hostable public server directory" ON)
+option(MEAT2D_BUILD_REPLAY_INSPECTOR "Build the offline replay-verification tool" ON)
 option(MEAT2D_BUILD_CLI "Build the project-management command-line tool" ON)
 option(MEAT2D_BUILD_LAUNCHER "Build the graphical project editor and launcher" ON)
 option(MEAT2D_BUILD_EXAMPLES "Build the example games" ON)
@@ -30,6 +31,7 @@ add_library(
     src/assets/SpriteSheet.cpp
     src/ai/LivingSimulation.cpp
     src/life/OrganismField.cpp
+    src/replay/Replay.cpp
     src/sim/Material.cpp
     src/sim/Projectile.cpp
     src/sim/Scenario.cpp
@@ -326,6 +328,13 @@ if(MEAT2D_BUILD_DIRECTORY)
     target_compile_features(meat2d_directory PRIVATE cxx_std_20)
     target_link_libraries(meat2d_directory PRIVATE Meat2D::Net)
     list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_directory)
+endif()
+
+if(MEAT2D_BUILD_REPLAY_INSPECTOR)
+    add_executable(meat2d_replay apps/replay/main.cpp)
+    target_compile_features(meat2d_replay PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_replay PRIVATE Meat2D::Core)
+    list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_replay)
 endif()
 
 if(MEAT2D_BUILD_CLI)

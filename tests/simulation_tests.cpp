@@ -8,6 +8,7 @@
 #include "meat2d/net/Reliability.hpp"
 #include "meat2d/net/Session.hpp"
 #include "meat2d/net/UdpSocket.hpp"
+#include "meat2d/replay/Replay.hpp"
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
@@ -1652,6 +1653,80 @@ void test_projectile_leaves_world_without_impact() {
     check(projectiles.projectiles().empty(), "out-of-bounds projectile was not pruned");
 }
 
+void test_replay_round_trip_and_divergence() {
+    meat2d::WorldConfig config{
+        .width = 48,
+        .height = 48,
+        .seed = 99,
+        .sleep_after_ticks = 30,
+    };
+    meat2d::World world(config);
+    meat2d::replay::ReplayLog log(config);
+
+    // Everything the reference run does to the world besides pure cellular
+    // simulation has to go through the log, including initial level dressing
+    // — play() only ever reconstructs a bare World from `config`.
+    for (std::int32_t y = 0; y < world.height(); ++y) {
+        log.record_paint(world.current_tick(), {24, y}, 0, meat2d::MaterialId::Stone);
+        world.paint_disc({24, y}, 0, meat2d::MaterialId::Stone);
+    }
+
+    constexpr meat2d::Tick total_ticks = 60;
+    for (meat2d::Tick tick = 0; tick < total_ticks; ++tick) {
+        if (tick == 10) {
+            log.record_paint(world.current_tick(), {10, 4}, 3, meat2d::MaterialId::Sand);
+            world.paint_disc({10, 4}, 3, meat2d::MaterialId::Sand);
+        }
+        world.step();
+        if (world.current_tick() % 20 == 0) {
+            log.record_checkpoint(world.current_tick(), world.state_hash());
+        }
+    }
+
+    check(!log.paint_events().empty(), "no paint events were recorded");
+    check(!log.checkpoints().empty(), "no checkpoints were recorded");
+
+    const auto encoded = log.encode();
+    meat2d::replay::ReplayLog decoded;
+    check(decoded.decode(encoded), "encoded replay log failed to decode");
+    check(decoded.paint_events().size() == log.paint_events().size(),
+          "decoded replay lost paint events");
+    check(decoded.checkpoints().size() == log.checkpoints().size(),
+          "decoded replay lost checkpoints");
+
+    const auto matched = meat2d::replay::play(decoded, total_ticks);
+    check(matched.outcome == meat2d::replay::ReplayOutcome::Matched,
+          "replay did not reproduce the recorded run");
+    check(matched.ticks_played == total_ticks, "matched replay reported the wrong tick count");
+
+    // Rebuild the log with one checkpoint hash deliberately wrong to prove
+    // play() detects a divergence at that exact tick, not only "the final
+    // state differs".
+    const auto tampered_tick = decoded.checkpoints().front().tick;
+    const auto original_hash = decoded.checkpoints().front().state_hash;
+    meat2d::replay::ReplayLog tampered(decoded.config());
+    for (const auto& event : decoded.paint_events()) {
+        tampered.record_paint(event.tick, event.position, event.radius, event.material);
+    }
+    bool tampered_once = false;
+    for (const auto& checkpoint : decoded.checkpoints()) {
+        if (!tampered_once && checkpoint.tick == tampered_tick) {
+            tampered.record_checkpoint(checkpoint.tick, checkpoint.state_hash ^ 0xFFFFFFFFULL);
+            tampered_once = true;
+        } else {
+            tampered.record_checkpoint(checkpoint.tick, checkpoint.state_hash);
+        }
+    }
+
+    const auto diverged = meat2d::replay::play(tampered, total_ticks);
+    check(diverged.outcome == meat2d::replay::ReplayOutcome::Diverged,
+          "tampered checkpoint was not detected as a divergence");
+    check(diverged.divergent_tick == tampered_tick, "divergence was reported at the wrong tick");
+    check(diverged.expected_hash == (original_hash ^ 0xFFFFFFFFULL),
+          "divergence reported the wrong expected hash");
+    check(diverged.actual_hash == original_hash, "divergence reported the wrong actual hash");
+}
+
 } // namespace
 
 int main() {
@@ -1691,6 +1766,7 @@ int main() {
         test_projectile_system_destroys_terrain();
         test_projectile_expires_without_impact();
         test_projectile_leaves_world_without_impact();
+        test_replay_round_trip_and_divergence();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';
         return 1;

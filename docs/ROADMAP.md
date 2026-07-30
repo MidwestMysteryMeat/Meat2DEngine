@@ -59,5 +59,6 @@
 - [x] Destructible terrain queries — deterministic `World::raycast`/`line_of_sight`
 - Scripting/mod extension boundary
 - [x] Profiling overlay — sandbox `F1` toggle: frame/step timing, cell/chunk stats
-- Replay inspector
+- [x] Replay inspector — `meat2d::replay` log/encode/play + `meat2d_replay` CLI
+      (World-level only; LivingSimulation agents/organisms not yet recordable)
 - Authenticated relay fallback for restrictive NAT

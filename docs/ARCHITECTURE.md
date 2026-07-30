@@ -101,6 +101,27 @@ and clears its alive flag. A detonated projectile stays visible in
 damage, effects) before it is pruned at the start of the next `step()`. No
 floating-point state, so trajectories and impacts replay identically.
 
+### Replay inspector
+
+`meat2d::replay` (`include/meat2d/replay/Replay.hpp`) records a `World`-level
+session as a `WorldConfig` plus an ordered log of paint events and periodic
+state-hash checkpoints, and can encode/decode that log to a portable binary
+file. `replay::play` reconstructs a fresh `World` from the config, replays
+the paint events at their recorded ticks, and compares every checkpoint hash
+against a fresh `state_hash()`, stopping at the first mismatch — pinpointing
+a determinism regression to an exact tick instead of only "the final state
+differs". `apps/replay` (`meat2d_replay`) is the command-line front end: load
+a `.replay` file and get a MATCHED/DIVERGED verdict.
+
+Scope: this covers `World` only — cellular reactions and movement are a pure
+function of world state, seed, and tick, so paint events are the only
+external input that needs recording. `ai::LivingSimulation` agents and
+`life::OrganismField` are not covered; they carry their own per-entity state
+and can mutate world cells from decisions this log does not capture. A
+session using agents or the organism brush needs its own recording layer
+built the same way — nothing in the sandbox records one of those sessions
+yet.
+
 ## Determinism
 
 Determinism is tested by executing equal worlds side by side and comparing a
