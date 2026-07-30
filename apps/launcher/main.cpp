@@ -6,6 +6,7 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_process.h>
 #include <SDL3_image/SDL_image.h>
 
 #include <backends/imgui_impl_sdl3.h>
@@ -25,9 +26,11 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -209,14 +212,165 @@ struct BackgroundTask {
     }
 };
 
+std::string path_utf8(const std::filesystem::path& path) {
+    const auto encoded = path.u8string();
+    return {reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+}
+
+std::filesystem::path executable_directory(const std::filesystem::path& executable) {
+    if (const auto* base_path = SDL_GetBasePath(); base_path != nullptr && base_path[0] != '\0') {
+        return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(base_path)));
+    }
+    std::error_code error;
+    auto absolute = std::filesystem::absolute(executable, error);
+    if (error) {
+        absolute = executable;
+    }
+    return absolute.has_parent_path() ? absolute.parent_path() : std::filesystem::current_path();
+}
+
+std::filesystem::path sibling_executable(const std::filesystem::path& directory,
+                                         std::string_view name) {
+    std::string filename(name);
+#if defined(_WIN32)
+    filename += ".exe";
+#endif
+    return directory / filename;
+}
+
+struct ManagedChild {
+    SDL_Process* process{};
+    std::string label;
+    int exit_code{};
+    bool reports_exit_code{};
+
+    [[nodiscard]] bool running() const noexcept {
+        return process != nullptr;
+    }
+};
+
+struct ProcessStartResult {
+    SDL_Process* process{};
+    std::string error;
+};
+
+ProcessStartResult start_process(std::span<const std::string> arguments,
+                                 const std::filesystem::path& working_directory,
+                                 bool background = true) {
+    if (arguments.empty() || arguments.front().empty()) {
+        return {
+            .process = nullptr,
+            .error = "No executable was provided.",
+        };
+    }
+
+    std::vector<const char*> argument_pointers;
+    argument_pointers.reserve(arguments.size() + 1U);
+    for (const auto& argument : arguments) {
+        argument_pointers.push_back(argument.c_str());
+    }
+    argument_pointers.push_back(nullptr);
+    const auto working_directory_utf8 = path_utf8(working_directory);
+
+    const auto properties = SDL_CreateProperties();
+    if (properties == 0U) {
+        return {
+            .process = nullptr,
+            .error = "Could not allocate process settings: " + std::string(SDL_GetError()),
+        };
+    }
+    const auto null_io = static_cast<Sint64>(SDL_PROCESS_STDIO_NULL);
+    const bool configured =
+        SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ARGS_POINTER,
+                               argument_pointers.data()) &&
+        SDL_SetStringProperty(properties, SDL_PROP_PROCESS_CREATE_WORKING_DIRECTORY_STRING,
+                              working_directory_utf8.c_str()) &&
+        SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, null_io) &&
+        SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER, null_io) &&
+        SDL_SetBooleanProperty(properties, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, background);
+    auto* process = configured ? SDL_CreateProcessWithProperties(properties) : nullptr;
+    const auto error = process == nullptr ? std::string(SDL_GetError()) : std::string{};
+    SDL_DestroyProperties(properties);
+    return {
+        .process = process,
+        .error = error,
+    };
+}
+
+std::optional<int> poll_process(ManagedChild& child) {
+    if (child.process == nullptr) {
+        return std::nullopt;
+    }
+    int exit_code = 0;
+    if (!SDL_WaitProcess(child.process, false, &exit_code)) {
+        return std::nullopt;
+    }
+    SDL_DestroyProcess(child.process);
+    child.process = nullptr;
+    child.exit_code = exit_code;
+    return exit_code;
+}
+
+void stop_process(ManagedChild& child, bool force) {
+    if (child.process != nullptr) {
+        SDL_KillProcess(child.process, force);
+    }
+}
+
+void shutdown_process(ManagedChild& child) {
+    if (child.process == nullptr) {
+        return;
+    }
+    int exit_code = 0;
+    bool exited = SDL_WaitProcess(child.process, false, &exit_code);
+    if (!exited) {
+        SDL_KillProcess(child.process, false);
+        SDL_Delay(20);
+        exited = SDL_WaitProcess(child.process, false, &exit_code);
+    }
+    if (!exited) {
+        SDL_KillProcess(child.process, true);
+        SDL_WaitProcess(child.process, true, &exit_code);
+    }
+    SDL_DestroyProcess(child.process);
+    child.process = nullptr;
+    child.exit_code = exit_code;
+}
+
+struct FileStamp {
+    std::uintmax_t size{};
+    std::filesystem::file_time_type last_write_time{};
+
+    bool operator==(const FileStamp&) const = default;
+};
+
+std::optional<FileStamp> file_stamp(const ProjectBrowser& browser,
+                                    const std::filesystem::path& relative_path) {
+    const auto found = std::find_if(browser.entries().begin(), browser.entries().end(),
+                                    [&relative_path](const ProjectEntry& entry) {
+                                        return entry.relative_path == relative_path &&
+                                               entry.kind != ProjectFileKind::Directory;
+                                    });
+    if (found == browser.entries().end()) {
+        return std::nullopt;
+    }
+    return FileStamp{
+        .size = found->size,
+        .last_write_time = found->last_write_time,
+    };
+}
+
 struct EditorState {
     explicit EditorState(const std::filesystem::path& executable)
-        : template_root(meat2d::tools::locate_template_root(executable)), manager(template_root) {
+        : runtime_root(executable_directory(executable)),
+          template_root(meat2d::tools::locate_template_root(executable)), manager(template_root) {
         const auto default_parent = std::filesystem::current_path() / "Meat2DProjects";
         new_directory = (default_parent / "my-meat2d-game").string();
         open_directory = std::filesystem::current_path().string();
+        next_project_scan = std::chrono::steady_clock::now() + std::chrono::seconds(1);
     }
 
+    std::filesystem::path runtime_root;
     std::filesystem::path template_root;
     ProjectManager manager;
     ProjectBrowser browser;
@@ -233,6 +387,7 @@ struct EditorState {
     ProjectFileKind selected_kind{ProjectFileKind::Other};
     std::string editor_text;
     std::string saved_text;
+    std::string disk_text;
     std::string search;
     int browser_filter{};
     std::string new_file{"src/new_file.cpp"};
@@ -245,6 +400,8 @@ struct EditorState {
     float preview_height{};
     meat2d::assets::SpriteSheet sprite_sheet;
     std::filesystem::path sprite_metadata_path;
+    std::string saved_sprite_metadata;
+    std::string sprite_metadata_disk_text;
     int preview_animation{};
 
     std::string repository;
@@ -254,10 +411,55 @@ struct EditorState {
     int lan_port{meat2d::net::default_lan_discovery_port};
     std::string directory_host{"127.0.0.1"};
     int directory_port{meat2d::net::default_directory_port};
+    int host_port{meat2d::net::default_port};
+    int direct_port{meat2d::net::default_port};
+    std::string direct_host{"127.0.0.1"};
+    std::string player_name{"Developer"};
+    std::string session_name{"Meat2D Elements Lab"};
+    bool advertise_public{};
+    ManagedChild hosted_server;
+    std::vector<ManagedChild> launched_clients;
 
-    [[nodiscard]] bool dirty() const {
+    std::optional<FileStamp> selected_stamp;
+    std::optional<FileStamp> metadata_stamp;
+    bool external_change_pending{};
+    bool selected_missing{};
+    std::chrono::steady_clock::time_point next_project_scan{};
+
+    [[nodiscard]] bool text_dirty() const {
         return !selected_path.empty() && ProjectBrowser::is_code(selected_kind) &&
                editor_text != saved_text;
+    }
+
+    [[nodiscard]] bool sprite_dirty() const {
+        return !selected_path.empty() && selected_kind == ProjectFileKind::Image &&
+               preview_texture != nullptr &&
+               meat2d::assets::encode_sprite_sheet_toml(sprite_sheet) != saved_sprite_metadata;
+    }
+
+    [[nodiscard]] bool dirty() const {
+        return text_dirty() || sprite_dirty();
+    }
+
+    [[nodiscard]] std::filesystem::path runtime_executable(std::string_view name) const {
+        return sibling_executable(runtime_root, name);
+    }
+
+    [[nodiscard]] meat2d::assets::SpriteSheet default_sprite_sheet() const {
+        return {
+            .image = selected_path.generic_string(),
+            .frame_width = static_cast<std::uint16_t>(std::clamp(preview_width, 1.0F, 32.0F)),
+            .frame_height = static_cast<std::uint16_t>(std::clamp(preview_height, 1.0F, 32.0F)),
+            .margin = 0,
+            .spacing = 0,
+            .animations = {},
+        };
+    }
+
+    void capture_file_stamps() {
+        selected_stamp = selected_path.empty() ? std::nullopt : file_stamp(browser, selected_path);
+        metadata_stamp =
+            sprite_metadata_path.empty() ? std::nullopt : file_stamp(browser, sprite_metadata_path);
     }
 
     void release_preview() {
@@ -271,27 +473,38 @@ struct EditorState {
 
     bool open_project(const std::filesystem::path& path) {
         if (dirty()) {
-            status = "Save or revert the current file before changing projects.";
+            status = "Save or revert the current code or sprite settings before changing "
+                     "projects.";
             return false;
         }
         release_preview();
         selected_path.clear();
         editor_text.clear();
         saved_text.clear();
+        disk_text.clear();
+        saved_sprite_metadata.clear();
+        sprite_metadata_disk_text.clear();
+        sprite_metadata_path.clear();
+        selected_stamp.reset();
+        metadata_stamp.reset();
+        external_change_pending = false;
+        selected_missing = false;
         if (!browser.open(path)) {
             status = std::string(browser.last_error());
             return false;
         }
         open_directory = browser.root().string();
+        next_project_scan = std::chrono::steady_clock::now() + std::chrono::seconds(1);
         status = "Opened " + browser.root().string();
         return true;
     }
 
-    void select_file(const ProjectEntry& entry, SDL_Renderer* renderer) {
+    void select_file(const ProjectEntry& entry, SDL_Renderer* renderer,
+                     bool discard_unsaved = false) {
         if (entry.kind == ProjectFileKind::Directory) {
             return;
         }
-        if (dirty()) {
+        if (dirty() && !discard_unsaved) {
             status = "Save or revert changes before opening another file.";
             return;
         }
@@ -300,7 +513,13 @@ struct EditorState {
         selected_kind = entry.kind;
         editor_text.clear();
         saved_text.clear();
+        disk_text.clear();
         sprite_metadata_path.clear();
+        saved_sprite_metadata.clear();
+        sprite_metadata_disk_text.clear();
+        external_change_pending = false;
+        selected_missing = false;
+        capture_file_stamps();
 
         if (entry.editable) {
             auto loaded = browser.load_text(entry.relative_path);
@@ -310,6 +529,7 @@ struct EditorState {
             }
             editor_text = std::move(loaded.text);
             saved_text = editor_text;
+            disk_text = editor_text;
             status = "Opened " + entry.relative_path.generic_string();
             return;
         }
@@ -323,34 +543,28 @@ struct EditorState {
             status = resolved.message;
             return;
         }
-        preview_texture = IMG_LoadTexture(renderer, resolved.path.string().c_str());
-        if (preview_texture == nullptr ||
-            !SDL_GetTextureSize(preview_texture, &preview_width, &preview_height)) {
-            release_preview();
-            status = "Image preview failed: " + std::string(SDL_GetError());
+        if (!reload_preview_texture(renderer)) {
             return;
         }
-        sprite_sheet = {
-            .image = entry.relative_path.generic_string(),
-            .frame_width = static_cast<std::uint16_t>(std::clamp(preview_width, 1.0F, 32.0F)),
-            .frame_height = static_cast<std::uint16_t>(std::clamp(preview_height, 1.0F, 32.0F)),
-            .margin = 0,
-            .spacing = 0,
-            .animations = {},
-        };
+        sprite_sheet = default_sprite_sheet();
         sprite_metadata_path = entry.relative_path.parent_path() /
                                (entry.relative_path.stem().string() + ".sprite.toml");
         const auto metadata = browser.load_text(sprite_metadata_path);
         if (metadata.success) {
+            sprite_metadata_disk_text = metadata.text;
             const auto parsed = meat2d::assets::decode_sprite_sheet_toml(metadata.text);
             if (parsed.sheet) {
                 sprite_sheet = *parsed.sheet;
             } else {
+                saved_sprite_metadata = meat2d::assets::encode_sprite_sheet_toml(sprite_sheet);
+                capture_file_stamps();
                 status = "Sprite metadata line " + std::to_string(parsed.error_line) + ": " +
                          parsed.error;
                 return;
             }
         }
+        saved_sprite_metadata = meat2d::assets::encode_sprite_sheet_toml(sprite_sheet);
+        capture_file_stamps();
         status = "Previewing " + entry.relative_path.generic_string();
     }
 
@@ -358,20 +572,32 @@ struct EditorState {
         if (selected_path.empty() || !ProjectBrowser::is_code(selected_kind)) {
             return false;
         }
+        if (external_change_pending) {
+            status = "Resolve the external file conflict before saving.";
+            return false;
+        }
         const auto result = browser.save_text(selected_path, editor_text);
         status = result.message;
         if (result.success) {
             saved_text = editor_text;
+            disk_text = editor_text;
+            external_change_pending = false;
+            selected_missing = false;
+            capture_file_stamps();
         }
         return result.success;
     }
 
-    void save_sprite_metadata() {
+    bool save_sprite_metadata() {
+        if (external_change_pending) {
+            status = "Resolve the external sprite conflict before saving.";
+            return false;
+        }
         const auto width = static_cast<std::uint32_t>(std::max(preview_width, 0.0F));
         const auto height = static_cast<std::uint32_t>(std::max(preview_height, 0.0F));
         if (!meat2d::assets::valid_sprite_sheet(sprite_sheet, width, height)) {
             status = "Sprite settings or animation frame ranges are invalid.";
-            return;
+            return false;
         }
         const auto encoded = meat2d::assets::encode_sprite_sheet_toml(sprite_sheet);
         BrowserResult result;
@@ -381,6 +607,426 @@ struct EditorState {
             result = browser.create_text_file(sprite_metadata_path, encoded);
         }
         status = result.message;
+        if (result.success) {
+            saved_sprite_metadata = encoded;
+            sprite_metadata_disk_text = encoded;
+            external_change_pending = false;
+            selected_missing = false;
+            capture_file_stamps();
+        }
+        return result.success;
+    }
+
+    bool save_active_document() {
+        if (external_change_pending) {
+            status = "Resolve the external file conflict before building or publishing.";
+            return false;
+        }
+        if (text_dirty()) {
+            return save_editor();
+        }
+        if (sprite_dirty()) {
+            return save_sprite_metadata();
+        }
+        return true;
+    }
+
+    bool reload_preview_texture(SDL_Renderer* renderer) {
+        const auto resolved = browser.resolve_for_external_open(selected_path);
+        if (!resolved.success) {
+            status = resolved.message;
+            return false;
+        }
+        const auto image_path = path_utf8(resolved.path);
+        auto* texture = IMG_LoadTexture(renderer, image_path.c_str());
+        float width = 0.0F;
+        float height = 0.0F;
+        if (texture == nullptr || !SDL_GetTextureSize(texture, &width, &height)) {
+            if (texture != nullptr) {
+                SDL_DestroyTexture(texture);
+            }
+            status = "Image preview failed: " + std::string(SDL_GetError());
+            return false;
+        }
+        release_preview();
+        preview_texture = texture;
+        preview_width = width;
+        preview_height = height;
+        return true;
+    }
+
+    bool reload_selected(SDL_Renderer* renderer) {
+        const auto path = selected_path;
+        const auto found = std::find_if(
+            browser.entries().begin(), browser.entries().end(),
+            [&path](const ProjectEntry& entry) { return entry.relative_path == path; });
+        if (found == browser.entries().end() || found->kind == ProjectFileKind::Directory) {
+            status = "The selected file no longer exists in the project.";
+            selected_missing = true;
+            external_change_pending = true;
+            return false;
+        }
+        select_file(*found, renderer, true);
+        return true;
+    }
+
+    bool recreate_selected() {
+        if (selected_path.empty() || !ProjectBrowser::is_code(selected_kind)) {
+            return false;
+        }
+        const auto result = browser.create_text_file(selected_path, editor_text);
+        status = result.message;
+        if (result.success) {
+            saved_text = editor_text;
+            disk_text = editor_text;
+            external_change_pending = false;
+            selected_missing = false;
+            capture_file_stamps();
+        }
+        return result.success;
+    }
+
+    void close_selected() {
+        release_preview();
+        selected_path.clear();
+        editor_text.clear();
+        saved_text.clear();
+        disk_text.clear();
+        sprite_metadata_path.clear();
+        saved_sprite_metadata.clear();
+        sprite_metadata_disk_text.clear();
+        selected_stamp.reset();
+        metadata_stamp.reset();
+        external_change_pending = false;
+        selected_missing = false;
+    }
+
+    void refresh_project(SDL_Renderer* renderer, bool report_unchanged = false) {
+        if (!browser.is_open()) {
+            return;
+        }
+        next_project_scan = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        if (!browser.refresh()) {
+            status = std::string(browser.last_error());
+            return;
+        }
+        if (selected_path.empty()) {
+            if (report_unchanged) {
+                status = browser.last_error().empty() ? "Project files refreshed."
+                                                      : std::string(browser.last_error());
+            }
+            return;
+        }
+
+        const auto current_selected_stamp = file_stamp(browser, selected_path);
+        const auto current_metadata_stamp = sprite_metadata_path.empty()
+                                                ? std::optional<FileStamp>{}
+                                                : file_stamp(browser, sprite_metadata_path);
+        const bool was_selected_missing = selected_missing;
+        if (!current_selected_stamp) {
+            selected_stamp.reset();
+            metadata_stamp = current_metadata_stamp;
+            selected_missing = true;
+            external_change_pending = true;
+            status = "The selected file was deleted outside the editor.";
+            return;
+        }
+
+        if (ProjectBrowser::is_code(selected_kind)) {
+            const auto loaded = browser.load_text(selected_path);
+            selected_stamp = current_selected_stamp;
+            metadata_stamp = current_metadata_stamp;
+            if (!loaded.success) {
+                external_change_pending = true;
+                status = loaded.error;
+                return;
+            }
+            if (was_selected_missing || loaded.text != disk_text) {
+                const bool had_local_text_changes = text_dirty();
+                disk_text = loaded.text;
+                if (loaded.text == editor_text) {
+                    saved_text = editor_text;
+                    external_change_pending = false;
+                    selected_missing = false;
+                    status = "The external editor saved the current buffer.";
+                    return;
+                }
+                if (had_local_text_changes) {
+                    saved_text = loaded.text;
+                    external_change_pending = true;
+                    selected_missing = false;
+                    status = "The selected file changed on disk; choose which version to keep.";
+                } else {
+                    editor_text = loaded.text;
+                    saved_text = loaded.text;
+                    external_change_pending = false;
+                    selected_missing = false;
+                    status =
+                        "Reloaded " + selected_path.generic_string() + " after an external edit.";
+                }
+                return;
+            }
+        } else if (selected_kind == ProjectFileKind::Image) {
+            std::string current_metadata_text;
+            const auto metadata = browser.load_text(sprite_metadata_path);
+            if (metadata.success) {
+                current_metadata_text = metadata.text;
+            }
+            const bool image_changed = current_selected_stamp != selected_stamp;
+            const bool metadata_existence_changed =
+                current_metadata_stamp.has_value() != metadata_stamp.has_value();
+            const bool metadata_changed = current_metadata_stamp != metadata_stamp ||
+                                          current_metadata_text != sprite_metadata_disk_text;
+            const bool had_local_sprite_changes = sprite_dirty();
+            selected_stamp = current_selected_stamp;
+            metadata_stamp = current_metadata_stamp;
+            sprite_metadata_disk_text = std::move(current_metadata_text);
+            if (image_changed || metadata_changed) {
+                if (had_local_sprite_changes) {
+                    if (image_changed && !reload_preview_texture(renderer)) {
+                        external_change_pending = true;
+                        return;
+                    }
+                    if (image_changed) {
+                        selected_missing = false;
+                    }
+                    if (metadata_changed) {
+                        const auto previous_disk_settings = saved_sprite_metadata;
+                        auto disk_settings = default_sprite_sheet();
+                        bool disk_metadata_valid = !current_metadata_stamp.has_value();
+                        if (metadata.success) {
+                            const auto parsed =
+                                meat2d::assets::decode_sprite_sheet_toml(metadata.text);
+                            disk_metadata_valid = parsed.sheet.has_value();
+                            if (parsed.sheet) {
+                                disk_settings = *parsed.sheet;
+                            }
+                        }
+                        saved_sprite_metadata =
+                            meat2d::assets::encode_sprite_sheet_toml(disk_settings);
+                        const auto editor_settings =
+                            meat2d::assets::encode_sprite_sheet_toml(sprite_sheet);
+                        if (editor_settings == saved_sprite_metadata) {
+                            external_change_pending = false;
+                            selected_missing = false;
+                            status = "The external editor saved the current sprite settings.";
+                        } else if (!disk_metadata_valid || metadata_existence_changed ||
+                                   saved_sprite_metadata != previous_disk_settings) {
+                            external_change_pending = true;
+                            selected_missing = false;
+                            status =
+                                "Sprite metadata changed on disk; choose which version to keep. "
+                                "The image preview is current.";
+                        } else {
+                            external_change_pending = false;
+                            selected_missing = false;
+                            status = "Reloaded metadata formatting; unsaved sprite settings were "
+                                     "preserved.";
+                        }
+                    } else {
+                        external_change_pending = false;
+                        status = "Reloaded the image; unsaved sprite settings were preserved.";
+                    }
+                } else {
+                    reload_selected(renderer);
+                }
+                return;
+            }
+        } else if (current_selected_stamp != selected_stamp) {
+            selected_stamp = current_selected_stamp;
+            external_change_pending = false;
+            selected_missing = false;
+            status = "The selected asset changed on disk.";
+            return;
+        }
+
+        selected_stamp = current_selected_stamp;
+        metadata_stamp = current_metadata_stamp;
+        if (report_unchanged) {
+            status = browser.last_error().empty() ? "Project files refreshed."
+                                                  : std::string(browser.last_error());
+        }
+    }
+
+    void poll_project_changes(SDL_Renderer* renderer) {
+        if (browser.is_open() && std::chrono::steady_clock::now() >= next_project_scan) {
+            refresh_project(renderer);
+        }
+    }
+
+    bool launch_client(std::vector<std::string> arguments, std::string label,
+                       bool background = true) {
+        poll_session_processes();
+        constexpr std::size_t maximum_editor_clients = 8;
+        if (launched_clients.size() >= maximum_editor_clients) {
+            status = "Close a launched client before starting another (editor limit: 8).";
+            return false;
+        }
+        const auto executable = runtime_executable("meat2d_sandbox");
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(executable, error)) {
+            status = "Living Lab client was not found beside the editor: " + executable.string();
+            return false;
+        }
+        arguments.insert(arguments.begin(), path_utf8(executable));
+        const auto working_directory = browser.is_open() ? browser.root() : runtime_root;
+        auto started = start_process(arguments, working_directory, background);
+        if (started.process == nullptr) {
+            status = "Could not launch client: " + started.error;
+            return false;
+        }
+        launched_clients.push_back({
+            .process = started.process,
+            .label = std::move(label),
+            .exit_code = 0,
+            .reports_exit_code = !background,
+        });
+        status = "Launched " + launched_clients.back().label + '.';
+        return true;
+    }
+
+    bool join_direct(std::string host, int port, bool background = true) {
+        if (host.empty() || player_name.empty() ||
+            player_name.size() > meat2d::net::maximum_player_name_bytes) {
+            status = "Enter a host and a player name of 1-24 bytes.";
+            return false;
+        }
+        const auto safe_port = std::clamp(port, 1, 65'535);
+        return launch_client(
+            {
+                "--connect",
+                host,
+                "--port",
+                std::to_string(safe_port),
+                "--name",
+                player_name,
+            },
+            host + ':' + std::to_string(safe_port), background);
+    }
+
+    bool join_public(std::uint64_t server_id, bool background = true) {
+        if (server_id == 0U || directory_host.empty() || player_name.empty() ||
+            player_name.size() > meat2d::net::maximum_player_name_bytes) {
+            status = "Enter a directory, server, and player name of 1-24 bytes.";
+            return false;
+        }
+        const auto safe_directory_port = std::clamp(directory_port, 1, 65'535);
+        return launch_client(
+            {
+                "--directory",
+                directory_host,
+                "--directory-port",
+                std::to_string(safe_directory_port),
+                "--server-id",
+                std::to_string(server_id),
+                "--name",
+                player_name,
+            },
+            "public server " + std::to_string(server_id), background);
+    }
+
+    bool start_host(bool process_smoke_test = false, bool background = true) {
+        poll_session_processes();
+        if (hosted_server.running()) {
+            status = "A server launched by this editor is already running.";
+            return false;
+        }
+        if (!process_smoke_test && (session_name.empty() ||
+                                    session_name.size() > meat2d::net::maximum_server_name_bytes)) {
+            status = "Enter a session name of 1-48 bytes.";
+            return false;
+        }
+        const auto executable = runtime_executable("meat2d_server");
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(executable, error)) {
+            status = "Dedicated server was not found beside the editor: " + executable.string();
+            return false;
+        }
+
+        const auto safe_host_port = process_smoke_test ? 0 : std::clamp(host_port, 1, 65'535);
+        std::vector<std::string> arguments{
+            path_utf8(executable),
+            "--listen",
+            "--port",
+            std::to_string(safe_host_port),
+            "--name",
+            process_smoke_test ? "Editor Process Smoke" : session_name,
+        };
+        if (process_smoke_test) {
+            arguments.insert(arguments.end(), {"--no-lan", "--ticks", "3", "--fast"});
+        } else {
+            arguments.insert(arguments.end(),
+                             {"--discovery-port", std::to_string(std::clamp(lan_port, 1, 65'535))});
+            if (advertise_public) {
+                if (directory_host.empty()) {
+                    status = "Enter a public directory host before advertising publicly.";
+                    return false;
+                }
+                arguments.insert(arguments.end(),
+                                 {"--public-directory", directory_host, "--directory-port",
+                                  std::to_string(std::clamp(directory_port, 1, 65'535))});
+            }
+        }
+
+        const auto working_directory = browser.is_open() ? browser.root() : runtime_root;
+        auto started = start_process(arguments, working_directory, background);
+        if (started.process == nullptr) {
+            status = "Could not launch dedicated server: " + started.error;
+            return false;
+        }
+        hosted_server = {
+            .process = started.process,
+            .label = process_smoke_test ? "process smoke server" : session_name,
+            .exit_code = 0,
+            .reports_exit_code = !background,
+        };
+        status = process_smoke_test ? "Started the editor process smoke server."
+                                    : "Hosting " + session_name + " on UDP " +
+                                          std::to_string(std::clamp(host_port, 1, 65'535)) + '.';
+        return true;
+    }
+
+    void poll_session_processes() {
+        if (const auto exit_code = poll_process(hosted_server)) {
+            status =
+                hosted_server.label + " stopped" +
+                (hosted_server.reports_exit_code ? " (exit " + std::to_string(*exit_code) + ")."
+                                                 : ".");
+        }
+        for (auto client = launched_clients.begin(); client != launched_clients.end();) {
+            if (const auto exit_code = poll_process(*client)) {
+                status = client->label + " closed" +
+                         (client->reports_exit_code ? " (exit " + std::to_string(*exit_code) + ")."
+                                                    : ".");
+                client = launched_clients.erase(client);
+            } else {
+                ++client;
+            }
+        }
+    }
+
+    void stop_host(bool force = false) {
+        if (hosted_server.running()) {
+            stop_process(hosted_server, force);
+            status = force ? "Force-stopping the hosted server." : "Stopping the hosted server.";
+        }
+    }
+
+    void stop_clients(bool force = false) {
+        for (auto& client : launched_clients) {
+            stop_process(client, force);
+        }
+        if (!launched_clients.empty()) {
+            status = force ? "Force-stopping launched clients." : "Stopping launched clients.";
+        }
+    }
+
+    void shutdown_session_processes() {
+        shutdown_process(hosted_server);
+        for (auto& client : launched_clients) {
+            shutdown_process(client);
+        }
+        launched_clients.clear();
     }
 };
 
@@ -484,7 +1130,7 @@ void draw_overview(EditorState& state) {
     const bool busy = state.task.running();
     ImGui::BeginDisabled(busy);
     if (ImGui::Button("Build Debug", {130.0F, 0.0F})) {
-        if (!state.dirty() || state.save_editor()) {
+        if (state.save_active_document()) {
             const auto root = state.browser.root();
             state.task.start(
                 [&state, root] { return state.manager.build_project(root, BuildProfile::Debug); });
@@ -492,14 +1138,14 @@ void draw_overview(EditorState& state) {
     }
     ImGui::SameLine();
     if (ImGui::Button("Build & Test", {130.0F, 0.0F})) {
-        if (!state.dirty() || state.save_editor()) {
+        if (state.save_active_document()) {
             const auto root = state.browser.root();
             state.task.start([&state, root] { return state.manager.run_project(root); });
         }
     }
     ImGui::SameLine();
     if (ImGui::Button("Build Release", {130.0F, 0.0F})) {
-        if (!state.dirty() || state.save_editor()) {
+        if (state.save_active_document()) {
             const auto root = state.browser.root();
             state.task.start([&state, root] {
                 return state.manager.build_project(root, BuildProfile::Release);
@@ -508,7 +1154,7 @@ void draw_overview(EditorState& state) {
     }
     ImGui::SameLine();
     if (ImGui::Button("Package", {110.0F, 0.0F})) {
-        if (!state.dirty() || state.save_editor()) {
+        if (state.save_active_document()) {
             const auto root = state.browser.root();
             state.task.start([&state, root] { return state.manager.package_project(root); });
         }
@@ -523,7 +1169,7 @@ void draw_overview(EditorState& state) {
     ImGui::Checkbox("Private repository", &state.private_repository);
     ImGui::BeginDisabled(busy || state.repository.empty());
     if (ImGui::Button("Create/push GitHub repository", {230.0F, 0.0F})) {
-        if (!state.dirty() || state.save_editor()) {
+        if (state.save_active_document()) {
             const auto root = state.browser.root();
             const auto repository = state.repository;
             const auto description = state.description;
@@ -562,19 +1208,17 @@ bool entry_visible(const EditorState& state, const ProjectEntry& entry) {
 void draw_file_list(EditorState& state, SDL_Renderer* renderer, SDL_Window* window) {
     ImGui::InputTextWithHint("##search", "Search project files", &state.search);
     ImGui::SameLine();
-    const char* filters[] = {"All", "Code", "Assets"};
+    const char* browser_filters[] = {"All", "Code", "Assets"};
     ImGui::SetNextItemWidth(90.0F);
-    ImGui::Combo("##filter", &state.browser_filter, filters, 3);
+    ImGui::Combo("##filter", &state.browser_filter, browser_filters, 3);
     ImGui::SameLine();
     if (ImGui::Button("Refresh")) {
-        state.browser.refresh();
-        state.status = state.browser.last_error().empty() ? "Project files refreshed."
-                                                          : std::string(state.browser.last_error());
+        state.refresh_project(renderer, true);
     }
     bool generated = state.browser.show_generated();
     if (ImGui::Checkbox("Show generated folders", &generated)) {
         state.browser.set_show_generated(generated);
-        state.browser.refresh();
+        state.refresh_project(renderer, true);
     }
 
     ImGui::BeginChild("project-tree", {0.0F, -174.0F}, ImGuiChildFlags_Borders,
@@ -613,13 +1257,13 @@ void draw_file_list(EditorState& state, SDL_Renderer* renderer, SDL_Window* wind
                              &state.import_source);
     ImGui::SameLine();
     if (ImGui::Button("Browse##asset", {78.0F, 0.0F})) {
-        static constexpr SDL_DialogFileFilter filters[]{
+        static constexpr SDL_DialogFileFilter asset_filters[]{
             {"Game assets", "png;jpg;jpeg;bmp;gif;webp;tga;wav;ogg;mp3;flac;ttf;otf"},
             {"Images", "png;jpg;jpeg;bmp;gif;webp;tga"},
             {"All files", "*"},
         };
-        SDL_ShowOpenFileDialog(import_asset_callback, nullptr, window, filters,
-                               static_cast<int>(std::size(filters)), nullptr, false);
+        SDL_ShowOpenFileDialog(import_asset_callback, nullptr, window, asset_filters,
+                               static_cast<int>(std::size(asset_filters)), nullptr, false);
     }
     ImGui::SameLine();
     if (ImGui::Button("Import", {85.0F, 0.0F})) {
@@ -676,8 +1320,9 @@ void draw_sprite_grid(EditorState& state) {
 }
 
 void draw_sprite_manager(EditorState& state) {
-    ImGui::Text("%s (%d x %d)", state.selected_path.generic_string().c_str(),
-                static_cast<int>(state.preview_width), static_cast<int>(state.preview_height));
+    ImGui::Text("%s%s (%d x %d)", state.selected_path.generic_string().c_str(),
+                state.sprite_dirty() ? " *" : "", static_cast<int>(state.preview_width),
+                static_cast<int>(state.preview_height));
     ImGui::TextDisabled("Metadata: %s", state.sprite_metadata_path.generic_string().c_str());
     draw_sprite_grid(state);
 
@@ -762,9 +1407,20 @@ void draw_sprite_manager(EditorState& state) {
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Save sprite metadata")) {
+    if (ImGui::Button("Save sprite metadata") ||
+        (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))) {
         state.save_sprite_metadata();
     }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!state.sprite_dirty() || state.external_change_pending);
+    if (ImGui::Button("Revert sprite settings")) {
+        const auto parsed = meat2d::assets::decode_sprite_sheet_toml(state.saved_sprite_metadata);
+        if (parsed.sheet) {
+            state.sprite_sheet = *parsed.sheet;
+            state.status = "Unsaved sprite settings reverted.";
+        }
+    }
+    ImGui::EndDisabled();
 
     if (!state.sprite_sheet.animations.empty() && frame_count != 0U) {
         state.preview_animation = std::clamp(
@@ -803,23 +1459,54 @@ void draw_sprite_manager(EditorState& state) {
     }
 }
 
-void draw_selected_file(EditorState& state) {
+void draw_selected_file(EditorState& state, SDL_Renderer* renderer) {
     if (state.selected_path.empty()) {
         ImGui::TextDisabled("Select code, configuration, or an asset from the project browser.");
         return;
     }
+    if (state.external_change_pending) {
+        ImGui::TextColored(
+            {1.0F, 0.68F, 0.24F, 1.0F}, "%s",
+            state.selected_missing
+                ? "This file was deleted outside the editor. Your in-editor data is preserved."
+                : "This file changed outside the editor while local edits were pending.");
+        if (state.selected_missing) {
+            if (ProjectBrowser::is_code(state.selected_kind) &&
+                ImGui::Button("Recreate from editor buffer")) {
+                state.recreate_selected();
+            }
+            if (ProjectBrowser::is_code(state.selected_kind)) {
+                ImGui::SameLine();
+            }
+            if (ImGui::Button(state.dirty() ? "Close and discard buffer" : "Close file")) {
+                state.close_selected();
+                return;
+            }
+        } else {
+            if (ImGui::Button("Reload disk version")) {
+                state.reload_selected(renderer);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Keep editor version")) {
+                state.external_change_pending = false;
+                state.status = "Keeping the editor version; Save will replace the disk version.";
+            }
+        }
+        ImGui::Separator();
+    }
     if (ProjectBrowser::is_code(state.selected_kind)) {
         ImGui::Text("%s%s", state.selected_path.generic_string().c_str(),
-                    state.dirty() ? " *" : "");
+                    state.text_dirty() ? " *" : "");
         ImGui::SameLine();
         if (ImGui::Button("Save") ||
             (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))) {
             state.save_editor();
         }
         ImGui::SameLine();
-        ImGui::BeginDisabled(!state.dirty());
+        ImGui::BeginDisabled(!state.text_dirty() || state.external_change_pending);
         if (ImGui::Button("Revert")) {
-            state.editor_text = state.saved_text;
+            state.editor_text = state.disk_text;
+            state.saved_text = state.disk_text;
             state.status = "Unsaved changes reverted.";
         }
         ImGui::EndDisabled();
@@ -850,7 +1537,7 @@ void draw_files(EditorState& state, SDL_Renderer* renderer, SDL_Window* window) 
         ImGui::TableNextColumn();
         draw_file_list(state, renderer, window);
         ImGui::TableNextColumn();
-        draw_selected_file(state);
+        draw_selected_file(state, renderer);
         ImGui::EndTable();
     }
 }
@@ -869,7 +1556,7 @@ void draw_server_table(std::string_view id, std::span<const meat2d::net::ServerI
     ImGui::TableSetupColumn("Action");
     ImGui::TableHeadersRow();
     for (const auto& server : servers) {
-        ImGui::PushID(static_cast<int>(server.server_id ^ (server.server_id >> 32U)));
+        ImGui::PushID(static_cast<const void*>(&server));
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         ImGui::TextUnformatted(server.name.c_str());
@@ -882,13 +1569,21 @@ void draw_server_table(std::string_view id, std::span<const meat2d::net::ServerI
         const auto endpoint = server.endpoint.address + ':' + std::to_string(server.endpoint.port);
         ImGui::TextUnformatted(endpoint.c_str());
         ImGui::TableNextColumn();
-        if (ImGui::Button("Copy join info")) {
-            const auto text = public_listing
-                                  ? "--directory " + state.directory_host + " --directory-port " +
-                                        std::to_string(state.directory_port) + " --server-id " +
-                                        std::to_string(server.server_id)
-                                  : "--host " + server.endpoint.address + " --port " +
-                                        std::to_string(server.endpoint.port);
+        if (ImGui::SmallButton("Join")) {
+            if (public_listing) {
+                state.join_public(server.server_id);
+            } else {
+                state.join_direct(server.endpoint.address, server.endpoint.port);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Copy")) {
+            const auto text =
+                public_listing ? "--directory " + state.directory_host + " --directory-port " +
+                                     std::to_string(std::clamp(state.directory_port, 1, 65'535)) +
+                                     " --server-id " + std::to_string(server.server_id)
+                               : "--connect " + server.endpoint.address + " --port " +
+                                     std::to_string(server.endpoint.port);
             ImGui::SetClipboardText(text.c_str());
             state.status = "Join information copied.";
         }
@@ -898,9 +1593,54 @@ void draw_server_table(std::string_view id, std::span<const meat2d::net::ServerI
 }
 
 void draw_multiplayer(EditorState& state) {
-    ImGui::SeparatorText("LAN sessions");
+    ImGui::SeparatorText("Developer session");
+    ImGui::TextWrapped("Launch the bundled authoritative Elements Lab server and graphical client "
+                       "without leaving the editor. These are editor-owned test processes and "
+                       "close with the editor.");
+    ImGui::SetNextItemWidth(300.0F);
+    ImGui::InputText("Player name", &state.player_name);
+    ImGui::SetNextItemWidth(300.0F);
+    ImGui::InputText("Session name", &state.session_name);
     ImGui::SetNextItemWidth(120.0F);
-    ImGui::InputInt("Discovery UDP port", &state.lan_port);
+    ImGui::InputInt("Game UDP port", &state.host_port);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120.0F);
+    ImGui::InputInt("LAN discovery UDP port", &state.lan_port);
+    ImGui::Checkbox("Advertise this host through the public directory", &state.advertise_public);
+    if (state.hosted_server.running()) {
+        if (ImGui::Button("Stop server", {125.0F, 0.0F})) {
+            state.stop_host();
+        }
+    } else if (ImGui::Button("Start server", {125.0F, 0.0F})) {
+        state.start_host();
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!state.hosted_server.running());
+    if (ImGui::Button("Join local host", {145.0F, 0.0F})) {
+        state.join_direct("127.0.0.1", state.host_port);
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("%zu launched client(s)", state.launched_clients.size());
+    if (!state.launched_clients.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Close launched clients")) {
+            state.stop_clients();
+        }
+    }
+
+    ImGui::SeparatorText("Direct join");
+    ImGui::SetNextItemWidth(300.0F);
+    ImGui::InputText("Host or IP", &state.direct_host);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120.0F);
+    ImGui::InputInt("Port##direct", &state.direct_port);
+    ImGui::SameLine();
+    if (ImGui::Button("Join direct", {115.0F, 0.0F})) {
+        state.join_direct(state.direct_host, state.direct_port);
+    }
+
+    ImGui::SeparatorText("LAN sessions");
     if (ImGui::Button("Refresh LAN")) {
         if (!state.lan_browser.refresh(
                 static_cast<std::uint16_t>(std::clamp(state.lan_port, 1, 65'535)), 1)) {
@@ -941,12 +1681,14 @@ void draw_multiplayer(EditorState& state) {
         ImGui::TextDisabled("Loading server pages...");
     }
     draw_server_table("public-servers", state.public_browser.servers(), state, true);
-    ImGui::TextWrapped("The editor browses sessions and copies join parameters. Games use "
-                       "Meat2D::Net to present their own Host, LAN, Public, and Direct Join UI.");
+    ImGui::TextWrapped("Join launches the bundled living-lab client. Shipped games use Meat2D::Net "
+                       "to present their own Host, LAN, Public, and Direct Join interface.");
 }
 
 void draw_editor(EditorState& state, SDL_Window* window, SDL_Renderer* renderer, bool& running) {
     poll_dialogs(state);
+    state.poll_project_changes(renderer);
+    state.poll_session_processes();
     const auto& io = ImGui::GetIO();
     ImGui::SetNextWindowPos({0.0F, 0.0F});
     ImGui::SetNextWindowSize(io.DisplaySize);
@@ -957,13 +1699,13 @@ void draw_editor(EditorState& state, SDL_Window* window, SDL_Renderer* renderer,
         if (ImGui::BeginMenu("Project")) {
             if (ImGui::MenuItem("Close project", nullptr, false,
                                 state.browser.is_open() && !state.dirty())) {
-                state.release_preview();
+                state.close_selected();
                 state.browser.close();
-                state.selected_path.clear();
             }
             if (ImGui::MenuItem("Quit")) {
                 if (state.dirty()) {
-                    state.status = "Save or revert the current file before quitting.";
+                    state.status = "Save or revert the current code or sprite settings before "
+                                   "quitting.";
                 } else {
                     running = false;
                 }
@@ -1005,10 +1747,15 @@ void draw_editor(EditorState& state, SDL_Window* window, SDL_Renderer* renderer,
 
 int main(int argc, char** argv) {
     bool smoke_test = false;
+    bool process_smoke_test = false;
     std::filesystem::path initial_project;
     for (int index = 1; index < argc; ++index) {
-        if (std::string_view(argv[index]) == "--smoke-test") {
+        const std::string_view argument(argv[index]);
+        if (argument == "--smoke-test") {
             smoke_test = true;
+        } else if (argument == "--process-smoke-test") {
+            smoke_test = true;
+            process_smoke_test = true;
         } else {
             initial_project = argv[index];
         }
@@ -1068,8 +1815,18 @@ int main(int argc, char** argv) {
             }
         }
     }
+    bool process_smoke_started = false;
+    if (process_smoke_test) {
+        process_smoke_started = state.start_host(true);
+        if (!process_smoke_started) {
+            std::fprintf(stderr, "Editor process smoke failed to start: %s\n",
+                         state.status.c_str());
+            smoke_failed = true;
+        }
+    }
     bool running = true;
     int rendered_frames = 0;
+    const auto process_smoke_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (running) {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) {
@@ -1078,7 +1835,8 @@ int main(int argc, char** argv) {
                 (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                  event.window.windowID == SDL_GetWindowID(window))) {
                 if (state.dirty()) {
-                    state.status = "Save or revert the current file before quitting.";
+                    state.status =
+                        "Save or revert the current code or sprite settings before quitting.";
                 } else {
                     running = false;
                 }
@@ -1096,11 +1854,25 @@ int main(int argc, char** argv) {
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
         ++rendered_frames;
-        if (smoke_test && rendered_frames >= 3) {
+        if (process_smoke_test) {
+            if (!process_smoke_started || !state.hosted_server.running()) {
+                if (process_smoke_started && state.hosted_server.exit_code != 0) {
+                    std::fprintf(stderr, "Editor process smoke server exited with %d\n",
+                                 state.hosted_server.exit_code);
+                    smoke_failed = true;
+                }
+                running = false;
+            } else if (std::chrono::steady_clock::now() >= process_smoke_deadline) {
+                std::fprintf(stderr, "Editor process smoke timed out\n");
+                smoke_failed = true;
+                running = false;
+            }
+        } else if (smoke_test && rendered_frames >= 3) {
             running = false;
         }
     }
 
+    state.shutdown_session_processes();
     state.release_preview();
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();

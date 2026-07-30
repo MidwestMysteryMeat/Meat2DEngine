@@ -40,9 +40,12 @@ project editor, starter games, and one-command packaging.
 - Installable `Meat2D::Core`, `Meat2D::Net`, and `Meat2D::Tools` CMake
   targets and CPack SDK archives
 - Graphical project editor with guarded code/config editing, native asset
-  import, PNG/JPEG preview, sprite-sheet grids, and animation metadata
+  import, external-change detection, PNG/JPEG preview, sprite-sheet grids, and
+  animation metadata
 - Side-view/top-down starters plus background build, test, package, and
   GitHub publishing actions
+- Editor-hosted test sessions with one-click local hosting and direct, LAN, or
+  public-directory joins
 
 ## Build
 
@@ -117,6 +120,12 @@ The graphical sandbox can join a selected public listing by ID:
 ./build/dev/meat2d_sandbox --server-id 123456789 \
   --directory directory.example.com --directory-port 27184 --name Player1
 ```
+
+The editor's **Multiplayer** tab can start and stop the bundled dedicated
+server, join the local host, join a hostname/IP directly, and launch a client
+from either its LAN or public server list. Set the directory endpoint there
+before enabling public advertisement. Editor-launched test processes close
+with the editor.
 
 In connected graphical clients, left/right painting is sent as validated,
 tick-targeted input to the server. The displayed material world is the
@@ -206,7 +215,7 @@ because deterministic replay is available.
 ```text
 apps/
   cli/           project creation/build/package/publish command
-  launcher/      graphical editor, code/asset browser, and sprite manager
+  launcher/      graphical editor, code/asset browser, sessions, sprite manager
   sandbox/       SDL3 interactive living laboratory
   server/        headless benchmark and authoritative server
   remote/        headless multiplayer smoke client
@@ -223,7 +232,8 @@ tests/           unit and determinism tests
 See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
 [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
 [Roadmap](docs/ROADMAP.md). See [Project editor](docs/EDITOR.md) for the
-code/asset browser, sprite workflow, and one-click test/package tools.
+code/asset browser, sprite workflow, hosted test sessions, and one-click
+build/package tools.
 
 ## License
 

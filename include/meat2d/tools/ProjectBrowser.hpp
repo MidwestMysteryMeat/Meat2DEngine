@@ -30,6 +30,7 @@ struct ProjectEntry {
     std::filesystem::path relative_path;
     ProjectFileKind kind{ProjectFileKind::Other};
     std::uintmax_t size{};
+    std::filesystem::file_time_type last_write_time{};
     std::size_t depth{};
     bool editable{};
 };

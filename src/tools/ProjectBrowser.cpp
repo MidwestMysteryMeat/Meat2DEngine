@@ -101,10 +101,16 @@ bool ProjectBrowser::refresh() {
                 size = 0;
             }
         }
+        auto last_write_time = std::filesystem::last_write_time(path, error);
+        if (error) {
+            error.clear();
+            last_write_time = {};
+        }
         entries_.push_back({
             .relative_path = relative,
             .kind = kind,
             .size = size,
+            .last_write_time = last_write_time,
             .depth = static_cast<std::size_t>(
                 std::max<std::ptrdiff_t>(0, std::distance(relative.begin(), relative.end()) - 1)),
             .editable = !directory && editable_kind(kind) && size <= maximum_editable_file_bytes,

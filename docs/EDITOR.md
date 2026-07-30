@@ -1,4 +1,4 @@
-# Project editor, code browser, and sprite workflow
+# Project editor, asset workflow, and multiplayer testing
 
 `meat2d_launcher` is a lightweight graphical workspace for creating and
 shipping Meat2D games. It is intentionally compatible with ordinary CMake,
@@ -34,6 +34,7 @@ The Code & Assets tab scans only the selected project root. It provides:
 - source, header, script, shader, CMake, TOML, JSON, documentation, image,
   audio, and font classification;
 - bounded in-editor text editing with tabs and `Ctrl+S`;
+- automatic project-tree refresh and selected-file change detection;
 - create-file and native asset-import controls;
 - PNG, JPEG, BMP, GIF, WebP, and TGA previews;
 - external-app opening for formats that need specialized tools.
@@ -43,6 +44,14 @@ default. Generated folders can be shown explicitly. Symlinks are not followed,
 paths are canonicalized, parent traversal is rejected, and the text editor
 will not load files above 2 MiB. Asset imports are copied under `assets/` and
 receive a non-destructive numbered filename when a name already exists.
+
+The editor checks the project once per second so files created by an external
+tool appear without reopening the project. A selected code file that changes
+on disk reloads automatically when its editor buffer is clean. If both copies
+changed, the editor preserves the local buffer and asks whether to reload the
+disk version or keep the editor version. Deleted files can be recreated from a
+preserved code buffer. No conflict is overwritten by Build, Package, Publish,
+or `Ctrl+S` until it is resolved.
 
 ## Sprite manager
 
@@ -85,6 +94,38 @@ frame count with `sprite_frame_count()`, and obtain source rectangles with
 `sprite_frame()`. Paths, dimensions, animation counts, ranges, and integer
 overflow are validated before use.
 
+Sprite settings have the same dirty marker and `Ctrl+S` behavior as code.
+Unsaved metadata is saved before build, package, or publish, blocks accidental
+project closure, and can be reverted. Externally replaced images reload while
+preserving unsaved frame settings; concurrent metadata edits use the same
+explicit conflict controls as source files.
+
+## Host and join developer sessions
+
+The **Multiplayer** tab turns the bundled Elements Lab into a quick networking
+test harness:
+
+- **Start server** launches `meat2d_server` with the selected gameplay and LAN
+  discovery ports.
+- **Join local host** launches `meat2d_sandbox` against `127.0.0.1`.
+- **Join direct** accepts any reachable hostname/IP and UDP gameplay port.
+- **Refresh LAN** discovers compatible local sessions; each row has **Join**
+  and **Copy** actions.
+- **Refresh public list** queries the configured self-hosted directory; each
+  listing can be joined through directory-assisted NAT introduction.
+
+Enter the public directory host and port, enable public advertisement, and
+then start the server to list an editor-hosted session publicly. The editor
+uses SDL's cross-platform process API with argument arrays rather than a
+command shell, so names and endpoints are not interpreted as shell commands.
+It polls server/client lifetimes without freezing the UI. The server and all
+clients launched from this tab are test processes owned by the editor and are
+closed when the editor exits.
+
+This tab launches the engine's living-lab client and server. Generated games
+remain ordinary C++ projects and should expose their own player-facing
+host/join screens through `Meat2D::Net`.
+
 ## Build, test, package, and publish
 
 The Project tab runs long operations in the background and keeps the editor
@@ -99,10 +140,10 @@ responsive:
 
 The intended inner loop is: select and edit a source or asset, choose **Build
 & Test**, and close the running game to return its captured exit result to the
-editor. Build, test, package, and publish save the current text buffer first;
-`Ctrl+S` remains available for explicit saves. Debug and Release share one
-multi-config dependency cache, so switching profiles does not clone and
-configure SDL twice.
+editor. Build, test, package, and publish save the current text or sprite
+metadata first; `Ctrl+S` remains available for explicit saves. Debug and
+Release share one multi-config dependency cache, so switching profiles does
+not clone and configure SDL twice.
 
 The editor finds CMake on `PATH`, in common Visual Studio/CMake/Scoop
 locations, or through `MEAT2D_CMAKE`. Source-tree builds automatically point

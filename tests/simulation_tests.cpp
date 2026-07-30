@@ -681,6 +681,15 @@ void test_project_browser_safety_and_editing() {
                          return entry.relative_path.generic_string().starts_with("build/");
                      });
     check(generated_hidden, "project browser exposed generated build files by default");
+    const auto source_entry =
+        std::find_if(browser.entries().begin(), browser.entries().end(),
+                     [](const meat2d::tools::ProjectEntry& entry) {
+                         return entry.relative_path.generic_string() == "src/main.cpp";
+                     });
+    check(source_entry != browser.entries().end() &&
+              source_entry->last_write_time ==
+                  std::filesystem::last_write_time(project / "src" / "main.cpp", error),
+          "project browser did not expose the source file modification time");
 
     auto loaded = browser.load_text("src/main.cpp");
     check(loaded.success, "project browser could not load source text");

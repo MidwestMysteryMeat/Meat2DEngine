@@ -44,7 +44,9 @@
 - [x] Asset and settings manifests
 - [x] Graphical project editor with a root-confined code/asset browser
 - [x] PNG/JPEG preview and sprite-sheet animation manager
+- [x] External code/asset refresh with conflict-safe editor buffers
 - [x] One-click background build, game test, package, and GitHub publish
+- [x] Editor-hosted local sessions and direct/LAN/public one-click joins
 - [x] Windows/Linux client and headless-server bundle definitions
 - [x] Reusable GitHub Actions build/release workflow
 - [ ] Tagged SDK archives and example game

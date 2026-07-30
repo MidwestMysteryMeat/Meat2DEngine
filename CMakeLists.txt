@@ -232,6 +232,25 @@ if(MEAT2D_BUILD_LAUNCHER)
 
     add_executable(meat2d_launcher apps/launcher/main.cpp)
     target_compile_features(meat2d_launcher PRIVATE cxx_std_20)
+    if(MSVC)
+        target_compile_options(meat2d_launcher PRIVATE /W4 /permissive- /Zc:__cplusplus)
+        if(MEAT2D_WARNINGS_AS_ERRORS)
+            target_compile_options(meat2d_launcher PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(
+            meat2d_launcher
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+                -Wconversion
+                -Wshadow
+        )
+        if(MEAT2D_WARNINGS_AS_ERRORS)
+            target_compile_options(meat2d_launcher PRIVATE -Werror)
+        endif()
+    endif()
     target_link_libraries(
         meat2d_launcher
         PRIVATE

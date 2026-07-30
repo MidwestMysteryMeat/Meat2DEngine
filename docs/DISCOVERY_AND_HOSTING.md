@@ -41,6 +41,14 @@ Other players can use the host's DNS name or IP with the same direct-connect
 flow. For a home router, forward the chosen UDP gameplay port when automatic
 NAT traversal is unavailable.
 
+For development, the graphical editor exposes the same paths without manual
+commands. Its **Multiplayer** tab can start the bundled authoritative server,
+join it locally, join a direct endpoint, or launch a selected LAN/public
+listing. Public advertisement uses the directory endpoint entered in the same
+tab. These editor-owned living-lab processes are stopped when the editor
+closes; shipped games provide their own UI on top of the same `Meat2D::Net`
+APIs.
+
 ## LAN server browser
 
 The dedicated-server app advertises on LAN by default. Disable it with
