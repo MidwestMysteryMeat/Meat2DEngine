@@ -55,7 +55,7 @@
 
 - Parallel deterministic chunk scheduling
 - Persistent/infinite world streaming
-- Shooter-oriented collision and projectiles
+- [x] Shooter-oriented collision and projectiles — deterministic `ProjectileSystem`
 - [x] Destructible terrain queries — deterministic `World::raycast`/`line_of_sight`
 - Scripting/mod extension boundary
 - Profiling overlay and replay inspector

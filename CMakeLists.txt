@@ -31,6 +31,7 @@ add_library(
     src/ai/LivingSimulation.cpp
     src/life/OrganismField.cpp
     src/sim/Material.cpp
+    src/sim/Projectile.cpp
     src/sim/Scenario.cpp
     src/sim/World.cpp
 )

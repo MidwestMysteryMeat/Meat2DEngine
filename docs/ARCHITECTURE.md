@@ -91,6 +91,16 @@ reflect destroyed terrain since they read live cell state rather than a cached
 occlusion grid. This is the query primitive shooter-oriented collision,
 projectiles, and agent perception can build on.
 
+`meat2d::ProjectileSystem` (`include/meat2d/sim/Projectile.hpp`) is the first
+consumer: each tick it advances every live projectile by an integer velocity
+and calls `raycast` for the segment just traveled. A blocked segment, or a
+destination cell that itself blocks line of sight, detonates the projectile
+— `set_material` for a single-cell impact, or `paint_disc` for a crater —
+and clears its alive flag. A detonated projectile stays visible in
+`projectiles()` for exactly the tick it died on, so a caller can react (splash
+damage, effects) before it is pruned at the start of the next `step()`. No
+floating-point state, so trajectories and impacts replay identically.
+
 ## Determinism
 
 Determinism is tested by executing equal worlds side by side and comparing a

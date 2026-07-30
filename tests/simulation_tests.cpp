@@ -8,6 +8,7 @@
 #include "meat2d/net/Reliability.hpp"
 #include "meat2d/net/Session.hpp"
 #include "meat2d/net/UdpSocket.hpp"
+#include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
 #include "meat2d/tools/ProjectBrowser.hpp"
@@ -1553,6 +1554,104 @@ void test_raycast_and_line_of_sight() {
     check(!out_of_bounds.blocked, "out-of-bounds origin should return a safe default, not a block");
 }
 
+void test_projectile_system_destroys_terrain() {
+    meat2d::World world({
+        .width = 64,
+        .height = 64,
+        .seed = 88,
+        .sleep_after_ticks = 30,
+    });
+    for (int y = 0; y < world.height(); ++y) {
+        world.set_material({40, y}, meat2d::MaterialId::Stone);
+    }
+
+    meat2d::ProjectileSystem projectiles;
+    projectiles.spawn(
+        {2, 32},
+        {
+            .velocity = {2, 0},
+            .max_ticks = 100,
+            .impact_radius = 0,
+            .impact_material = meat2d::MaterialId::Empty,
+        });
+
+    bool detonated = false;
+    for (int tick = 0; tick < 40 && !detonated; ++tick) {
+        projectiles.step(world);
+        for (const auto& projectile : projectiles.projectiles()) {
+            if (!projectile.alive) {
+                check(projectile.position == meat2d::Vec2i{40, 32},
+                      "projectile did not detonate on the wall it hit");
+                detonated = true;
+            }
+        }
+    }
+    check(detonated, "projectile never detonated against the wall");
+    check(world.material({40, 32}) == meat2d::MaterialId::Empty,
+          "projectile impact did not carve the wall");
+
+    projectiles.step(world);
+    check(projectiles.projectiles().empty(), "detonated projectile was not pruned next step");
+}
+
+void test_projectile_expires_without_impact() {
+    meat2d::World world({
+        .width = 16,
+        .height = 16,
+        .seed = 89,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::ProjectileSystem projectiles;
+    projectiles.spawn(
+        {1, 8},
+        {
+            .velocity = {1, 0},
+            .max_ticks = 3,
+            .impact_radius = 0,
+            .impact_material = meat2d::MaterialId::Fire,
+        });
+    for (int tick = 0; tick < 3; ++tick) {
+        projectiles.step(world);
+    }
+    check(projectiles.projectiles().size() == 1,
+          "projectile should still be visible on its expiry tick");
+    check(!projectiles.projectiles().front().alive, "projectile did not expire at max_ticks");
+
+    projectiles.step(world);
+    check(projectiles.projectiles().empty(), "expired projectile was not pruned");
+    for (int x = 0; x < world.width(); ++x) {
+        for (int y = 0; y < world.height(); ++y) {
+            check(world.material({x, y}) == meat2d::MaterialId::Empty,
+                  "expiring in open space should not modify terrain");
+        }
+    }
+}
+
+void test_projectile_leaves_world_without_impact() {
+    meat2d::World world({
+        .width = 16,
+        .height = 16,
+        .seed = 90,
+        .sleep_after_ticks = 30,
+    });
+    meat2d::ProjectileSystem projectiles;
+    projectiles.spawn(
+        {14, 8},
+        {
+            .velocity = {5, 0},
+            .max_ticks = 50,
+            .impact_radius = 0,
+            .impact_material = meat2d::MaterialId::Fire,
+        });
+
+    projectiles.step(world);
+    check(projectiles.projectiles().size() == 1 && !projectiles.projectiles().front().alive,
+          "projectile leaving the world bounds should die without detonating");
+
+    projectiles.step(world);
+    check(projectiles.projectiles().empty(), "out-of-bounds projectile was not pruned");
+}
+
 } // namespace
 
 int main() {
@@ -1589,6 +1688,9 @@ int main() {
         test_dirty_region_rasterization();
         test_raster_output();
         test_raycast_and_line_of_sight();
+        test_projectile_system_destroys_terrain();
+        test_projectile_expires_without_impact();
+        test_projectile_leaves_world_without_impact();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';
         return 1;
