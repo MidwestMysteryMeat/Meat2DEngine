@@ -65,6 +65,42 @@ else()
 endif()
 
 add_library(
+    meat2d_render
+    STATIC
+    src/render/WorldView.cpp
+)
+add_library(Meat2D::Render ALIAS meat2d_render)
+set_target_properties(meat2d_render PROPERTIES EXPORT_NAME Render)
+target_compile_features(meat2d_render PUBLIC cxx_std_20)
+target_include_directories(
+    meat2d_render
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(meat2d_render PUBLIC Meat2D::Core)
+
+if(MSVC)
+    target_compile_options(meat2d_render PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_render PRIVATE /WX)
+    endif()
+else()
+    target_compile_options(
+        meat2d_render
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wconversion
+            -Wshadow
+    )
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_render PRIVATE -Werror)
+    endif()
+endif()
+
+add_library(
     meat2d_tools
     STATIC
     src/tools/Process.cpp
@@ -172,7 +208,7 @@ endif()
 if(MEAT2D_BUILD_CLIENT)
     add_executable(meat2d_sandbox apps/sandbox/main.cpp)
     target_compile_features(meat2d_sandbox PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_sandbox PRIVATE Meat2D::Net SDL3::SDL3)
+    target_link_libraries(meat2d_sandbox PRIVATE Meat2D::Net Meat2D::Render SDL3::SDL3)
     list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_sandbox)
 endif()
 
@@ -294,7 +330,7 @@ endif()
 if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
     add_executable(meat2d_tests tests/simulation_tests.cpp)
     target_compile_features(meat2d_tests PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Tools)
+    target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
 endif()
 
@@ -316,7 +352,7 @@ endif()
 
 if(MEAT2D_ENABLE_INSTALL)
     install(
-        TARGETS meat2d_core meat2d_net meat2d_tools
+        TARGETS meat2d_core meat2d_net meat2d_render meat2d_tools
         EXPORT Meat2DTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

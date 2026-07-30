@@ -1,4 +1,5 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/render/WorldView.hpp>
 #include <meat2d/sim/Scenario.hpp>
 
 #include <SDL3/SDL.h>
@@ -8,7 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <vector>
+#include <span>
 
 namespace {
 
@@ -23,7 +24,16 @@ bool passable(const meat2d::World& world, meat2d::Vec2i position) {
            phase == meat2d::MaterialPhase::Liquid;
 }
 
-void draw_player(std::vector<std::uint8_t>& pixels, const meat2d::World& world,
+void mark_player(meat2d::render::WorldView& view, const meat2d::World& world,
+                 meat2d::Vec2i position) {
+    for (int y = position.y - 4; y <= position.y; ++y) {
+        for (int x = position.x - 1; x <= position.x + 1; ++x) {
+            view.mark_overlay_cell(world, {x, y});
+        }
+    }
+}
+
+void draw_player(std::span<std::uint8_t> pixels, const meat2d::World& world,
                  meat2d::Vec2i position) {
     for (int y = position.y - 4; y <= position.y; ++y) {
         for (int x = position.x - 1; x <= position.x + 1; ++x) {
@@ -80,8 +90,7 @@ int main(int, char**) {
     }
     SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 
-    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(game.world().width()) *
-                                     static_cast<std::size_t>(game.world().height()) * 4U);
+    meat2d::render::WorldView view;
     meat2d::MaterialId brush = meat2d::MaterialId::Sand;
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
@@ -162,9 +171,20 @@ int main(int, char**) {
             accumulator -= fixed_seconds;
         }
 
-        game.world().rasterize_rgba(pixels);
-        draw_player(pixels, game.world(), player);
-        SDL_UpdateTexture(texture, nullptr, pixels.data(), game.world().width() * 4);
+        mark_player(view, game.world(), player);
+        const auto frame = view.update(
+            game.world(), [&game, player](std::span<std::uint8_t> pixels, meat2d::RectI) {
+                draw_player(pixels, game.world(), player);
+            });
+        if (frame.full_upload) {
+            SDL_UpdateTexture(texture, nullptr, view.pixels().data(), view.pitch_bytes());
+        } else {
+            for (const auto& region : frame.regions) {
+                const SDL_Rect update_rect{region.x, region.y, region.width, region.height};
+                SDL_UpdateTexture(texture, &update_rect, view.region_pixels(region),
+                                  view.pitch_bytes());
+            }
+        }
         SDL_SetRenderDrawColor(renderer, 8, 10, 18, 255);
         SDL_RenderClear(renderer);
         SDL_RenderTexture(renderer, texture, nullptr, nullptr);

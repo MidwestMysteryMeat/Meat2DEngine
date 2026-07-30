@@ -1,4 +1,5 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/render/WorldView.hpp>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -7,7 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <vector>
+#include <span>
 
 namespace {
 
@@ -42,7 +43,16 @@ void seed_arena(meat2d::World& world) {
     world.wake_all();
 }
 
-void draw_player(std::vector<std::uint8_t>& pixels, const meat2d::World& world,
+void mark_player(meat2d::render::WorldView& view, const meat2d::World& world,
+                 meat2d::Vec2i position) {
+    for (int y = position.y - 2; y <= position.y + 2; ++y) {
+        for (int x = position.x - 2; x <= position.x + 2; ++x) {
+            view.mark_overlay_cell(world, {x, y});
+        }
+    }
+}
+
+void draw_player(std::span<std::uint8_t> pixels, const meat2d::World& world,
                  meat2d::Vec2i position) {
     for (int y = position.y - 2; y <= position.y + 2; ++y) {
         for (int x = position.x - 2; x <= position.x + 2; ++x) {

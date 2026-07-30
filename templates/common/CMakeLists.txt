@@ -52,7 +52,7 @@ FetchContent_MakeAvailable(SDL3)
 
 add_executable({{PROJECT_SLUG}} src/main.cpp)
 target_compile_features({{PROJECT_SLUG}} PRIVATE cxx_std_20)
-target_link_libraries({{PROJECT_SLUG}} PRIVATE Meat2D::Net SDL3::SDL3)
+target_link_libraries({{PROJECT_SLUG}} PRIVATE Meat2D::Net Meat2D::Render SDL3::SDL3)
 
 if(MSVC)
     target_compile_options({{PROJECT_SLUG}} PRIVATE /W4 /permissive-)
