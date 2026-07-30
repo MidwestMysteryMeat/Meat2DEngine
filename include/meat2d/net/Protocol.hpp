@@ -9,6 +9,8 @@ namespace meat2d::net {
 inline constexpr std::uint32_t protocol_magic = 0x4D32444EU; // "M2DN"
 inline constexpr std::uint16_t protocol_version = 1;
 inline constexpr std::uint16_t default_port = 27182;
+inline constexpr std::uint16_t default_lan_discovery_port = 27183;
+inline constexpr std::uint16_t default_directory_port = 27184;
 inline constexpr std::uint8_t maximum_players = 8;
 inline constexpr std::size_t maximum_datagram_bytes = 1'200;
 inline constexpr std::size_t encoded_header_bytes = 28;
@@ -29,13 +31,18 @@ enum class PacketType : std::uint8_t {
     Snapshot,
     ChunkDelta,
     Acknowledgement,
-    Disconnect
+    Disconnect,
+    LanQuery,
+    LanAnnouncement,
+    DirectoryRegister,
+    DirectoryListRequest,
+    DirectoryListResponse,
+    DirectoryJoinRequest,
+    DirectoryPunch,
+    HolePunch
 };
 
-enum class InputKind : std::uint8_t {
-    SetFocus,
-    Paint
-};
+enum class InputKind : std::uint8_t { SetFocus, Paint };
 
 struct PacketHeader {
     std::uint32_t magic{protocol_magic};

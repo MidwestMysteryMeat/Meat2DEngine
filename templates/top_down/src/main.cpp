@@ -1,0 +1,166 @@
+#include <meat2d/ai/LivingSimulation.hpp>
+
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+namespace {
+
+constexpr double fixed_seconds = 1.0 / 60.0;
+
+bool passable(const meat2d::World& world, meat2d::Vec2i position) {
+    if (!world.in_bounds(position)) {
+        return false;
+    }
+    const auto phase = meat2d::material_definition(world.material(position)).phase;
+    return phase == meat2d::MaterialPhase::Empty || phase == meat2d::MaterialPhase::Gas ||
+           phase == meat2d::MaterialPhase::Liquid;
+}
+
+void seed_arena(meat2d::World& world) {
+    for (int x = 0; x < world.width(); ++x) {
+        world.set_material({x, 0}, meat2d::MaterialId::Concrete);
+        world.set_material({x, world.height() - 1}, meat2d::MaterialId::Concrete);
+    }
+    for (int y = 0; y < world.height(); ++y) {
+        world.set_material({0, y}, meat2d::MaterialId::Concrete);
+        world.set_material({world.width() - 1, y}, meat2d::MaterialId::Concrete);
+    }
+    for (int x = 50; x < 270; ++x) {
+        if (x % 37 > 8) {
+            world.set_material({x, 65}, meat2d::MaterialId::Stone);
+            world.set_material({world.width() - x, 125}, meat2d::MaterialId::Wood);
+        }
+    }
+    world.paint_disc({80, 100}, 14, meat2d::MaterialId::Water);
+    world.paint_disc({245, 90}, 10, meat2d::MaterialId::Oil);
+    world.wake_all();
+}
+
+void draw_player(std::vector<std::uint8_t>& pixels, const meat2d::World& world,
+                 meat2d::Vec2i position) {
+    for (int y = position.y - 2; y <= position.y + 2; ++y) {
+        for (int x = position.x - 2; x <= position.x + 2; ++x) {
+            if (!world.in_bounds({x, y})) {
+                continue;
+            }
+            const auto offset =
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(world.width()) +
+                 static_cast<std::size_t>(x)) *
+                4U;
+            pixels[offset] = 87;
+            pixels[offset + 1U] = 225;
+            pixels[offset + 2U] = 255;
+            pixels[offset + 3U] = 255;
+        }
+    }
+}
+
+} // namespace
+
+int main(int, char**) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+        std::fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_Window* window = nullptr;
+    SDL_Renderer* renderer = nullptr;
+    if (!SDL_CreateWindowAndRenderer("{{PROJECT_NAME}}", 1280, 720, SDL_WINDOW_RESIZABLE, &window,
+                                     &renderer)) {
+        std::fprintf(stderr, "Window creation failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
+    meat2d::ai::LivingSimulation game({
+        .width = 320,
+        .height = 180,
+        .seed = 0x544F50444F574EULL,
+        .sleep_after_ticks = 30,
+    });
+    seed_arena(game.world());
+    meat2d::Vec2i player{160, 90};
+
+    auto* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING,
+                                      game.world().width(), game.world().height());
+    if (texture == nullptr) {
+        std::fprintf(stderr, "Texture creation failed: %s\n", SDL_GetError());
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(game.world().width()) *
+                                     static_cast<std::size_t>(game.world().height()) * 4U);
+
+    bool running = true;
+    auto previous = std::chrono::steady_clock::now();
+    double accumulator = 0.0;
+    while (running) {
+        SDL_Event event{};
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT ||
+                (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)) {
+                running = false;
+            }
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        accumulator += std::min(0.25, std::chrono::duration<double>(now - previous).count());
+        previous = now;
+        while (accumulator >= fixed_seconds) {
+            const auto* keys = SDL_GetKeyboardState(nullptr);
+            const meat2d::Vec2i direction{
+                (keys[SDL_SCANCODE_D] ? 1 : 0) - (keys[SDL_SCANCODE_A] ? 1 : 0),
+                (keys[SDL_SCANCODE_S] ? 1 : 0) - (keys[SDL_SCANCODE_W] ? 1 : 0),
+            };
+            const meat2d::Vec2i horizontal{player.x + direction.x, player.y};
+            if (direction.x != 0 && passable(game.world(), horizontal)) {
+                player = horizontal;
+            }
+            const meat2d::Vec2i vertical{player.x, player.y + direction.y};
+            if (direction.y != 0 && passable(game.world(), vertical)) {
+                player = vertical;
+            }
+
+            float mouse_x = 0.0F;
+            float mouse_y = 0.0F;
+            const auto buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+            if ((buttons & SDL_BUTTON_LMASK) != 0U) {
+                int output_width = 1;
+                int output_height = 1;
+                SDL_GetRenderOutputSize(renderer, &output_width, &output_height);
+                const meat2d::Vec2i target{
+                    static_cast<int>(mouse_x * static_cast<float>(game.world().width()) /
+                                     static_cast<float>(output_width)),
+                    static_cast<int>(mouse_y * static_cast<float>(game.world().height()) /
+                                     static_cast<float>(output_height)),
+                };
+                game.world().paint_disc(target, 3, meat2d::MaterialId::Fire);
+            }
+            game.step();
+            accumulator -= fixed_seconds;
+        }
+
+        game.world().rasterize_rgba(pixels);
+        draw_player(pixels, game.world(), player);
+        SDL_UpdateTexture(texture, nullptr, pixels.data(), game.world().width() * 4);
+        SDL_SetRenderDrawColor(renderer, 5, 8, 13, 255);
+        SDL_RenderClear(renderer);
+        SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(1);
+    }
+
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
+}

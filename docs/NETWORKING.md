@@ -32,6 +32,8 @@ and sends acknowledgements or periodic keepalives.
 - Protocol magic: `M2DN`
 - Protocol version: 1
 - Default UDP port: 27182
+- LAN discovery UDP port: 27183
+- Public directory UDP port: 27184
 - Maximum clients: 8
 - Maximum datagram: 1,200 bytes
 - Encoded packet header: 28 bytes
@@ -85,8 +87,21 @@ derived session token. Every input must:
 
 This prevents accidental cross-session input and raises the bar for spoofing,
 but it is not encryption or account authentication. Internet-facing games
-should add an authenticated encryption layer, identity service, denial-of-
-service controls, and NAT traversal appropriate to their deployment.
+should add an authenticated encryption layer, identity service, and
+denial-of-service controls appropriate to their deployment.
+
+## Finding and hosting sessions
+
+`Meat2D::Net` also provides automatic LAN discovery, a paginated public server
+browser, a self-hostable directory executable, expiring server registrations,
+and directory-coordinated UDP hole punching. Direct IP/hostname joins remain
+available and the hosting player can join locally through `127.0.0.1`.
+
+The public directory observes endpoints from gameplay-socket heartbeats and
+never relays authoritative traffic. Hole punching is best effort; symmetric
+NAT and blocked UDP still require a forwarded port, reachable dedicated host,
+overlay network, or a future authenticated relay. See
+[Discovery and player-hosted sessions](DISCOVERY_AND_HOSTING.md).
 
 ## Run locally
 

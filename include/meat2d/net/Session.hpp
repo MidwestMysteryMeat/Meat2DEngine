@@ -2,6 +2,7 @@
 
 #include "meat2d/ai/LivingSimulation.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
+#include "meat2d/net/Discovery.hpp"
 #include "meat2d/net/Fragmentation.hpp"
 #include "meat2d/net/PacketCodec.hpp"
 #include "meat2d/net/Reliability.hpp"
@@ -30,6 +31,16 @@ struct ServerConfig {
     std::uint32_t snapshot_interval_ticks{3};
     std::uint32_t chunk_interval_ticks{1};
     std::uint32_t client_timeout_updates{600};
+    std::string session_name{"Meat2D Server"};
+    std::string mode_name{"Sandbox"};
+    std::string map_name{"Elements Lab"};
+    std::uint32_t build_id{1};
+    bool password_protected{};
+    bool advertise_lan{};
+    std::uint16_t lan_discovery_port{default_lan_discovery_port};
+    bool advertise_public{};
+    std::optional<Endpoint> public_directory;
+    std::uint32_t directory_heartbeat_updates{120};
 };
 
 struct ServerUpdateStats {
@@ -41,6 +52,9 @@ struct ServerUpdateStats {
     std::uint32_t rejected_inputs{};
     std::uint32_t chunk_messages{};
     std::uint32_t connected_clients{};
+    std::uint32_t lan_replies{};
+    std::uint32_t directory_heartbeats{};
+    std::uint32_t nat_punches{};
 };
 
 class AuthoritativeServer {
@@ -55,6 +69,8 @@ class AuthoritativeServer {
     [[nodiscard]] bool running() const noexcept;
     [[nodiscard]] std::uint16_t port() const noexcept;
     [[nodiscard]] std::size_t client_count() const noexcept;
+    [[nodiscard]] std::uint64_t server_id() const noexcept;
+    [[nodiscard]] ServerInfo server_info() const;
     [[nodiscard]] std::string_view last_error() const noexcept;
 
     [[nodiscard]] ai::LivingSimulation& simulation() noexcept;
@@ -87,38 +103,29 @@ class AuthoritativeServer {
     [[nodiscard]] ClientSlot* find_client(std::uint8_t id) noexcept;
     [[nodiscard]] std::uint8_t allocate_client_id() const noexcept;
     void poll_datagrams(ServerUpdateStats& stats);
-    void handle_unknown(
-        const Endpoint& endpoint,
-        const Packet& packet,
-        ServerUpdateStats& stats);
-    void handle_client_packet(
-        ClientSlot& client,
-        const Packet& packet,
-        ServerUpdateStats& stats);
+    void handle_unknown(const Endpoint& endpoint, const Packet& packet, ServerUpdateStats& stats);
+    void handle_client_packet(ClientSlot& client, const Packet& packet, ServerUpdateStats& stats);
     void apply_inputs(ServerUpdateStats& stats);
     void send_world_updates(ServerUpdateStats& stats);
     bool send_packet(ClientSlot& client, const Packet& packet, ServerUpdateStats& stats);
-    void send_message(
-        ClientSlot& client,
-        PacketType type,
-        std::span<const std::uint8_t> payload,
-        bool reliable,
-        std::uint8_t additional_flags,
-        ServerUpdateStats& stats);
-    void send_chunk(
-        ClientSlot& client,
-        std::size_t chunk_index,
-        ServerUpdateStats& stats);
+    void send_message(ClientSlot& client, PacketType type, std::span<const std::uint8_t> payload,
+                      bool reliable, std::uint8_t additional_flags, ServerUpdateStats& stats);
+    void send_chunk(ClientSlot& client, std::size_t chunk_index, ServerUpdateStats& stats);
     void flush_channels(ServerUpdateStats& stats);
     void remove_timed_out_clients();
+    void send_directory_registration(ServerUpdateStats& stats);
 
     ServerConfig config_;
     ai::LivingSimulation simulation_;
     UdpSocket socket_;
+    LanServerAdvertiser lan_advertiser_;
+    std::optional<Endpoint> public_directory_;
     std::vector<ClientSlot> clients_;
     std::vector<QueuedInput> inputs_;
     std::uint32_t network_update_{};
     std::uint64_t server_secret_{};
+    std::uint64_t server_id_{};
+    std::uint64_t registration_secret_{};
     std::string last_error_;
 };
 
@@ -145,10 +152,9 @@ class AuthoritativeClient {
     AuthoritativeClient(const AuthoritativeClient&) = delete;
     AuthoritativeClient& operator=(const AuthoritativeClient&) = delete;
 
-    bool connect(
-        Endpoint server,
-        std::string player_name,
-        std::uint64_t nonce = 0);
+    bool connect(Endpoint server, std::string player_name, std::uint64_t nonce = 0);
+    bool connect_via_directory(Endpoint directory, std::uint64_t server_id, std::string player_name,
+                               std::uint64_t nonce = 0);
     void disconnect();
     ClientUpdateStats update();
     bool send_input(InputMessage input);
@@ -165,6 +171,9 @@ class AuthoritativeClient {
     [[nodiscard]] std::string_view last_error() const noexcept;
 
   private:
+    bool begin_connection(std::string player_name, std::uint64_t nonce);
+    bool send_hello();
+    bool send_directory_join();
     void poll_datagrams(ClientUpdateStats& stats);
     void handle_packet(const Packet& packet, ClientUpdateStats& stats);
     bool send_packet(const Packet& packet, ClientUpdateStats* stats);
@@ -173,11 +182,14 @@ class AuthoritativeClient {
 
     UdpSocket socket_;
     Endpoint server_;
+    std::optional<Endpoint> directory_;
     ReliableChannel channel_;
     FragmentAssembler fragments_;
     ClientConnectionState state_{ClientConnectionState::Disconnected};
     std::string player_name_;
     std::uint64_t nonce_{};
+    std::uint64_t requested_server_id_{};
+    std::uint64_t directory_request_id_{};
     std::uint32_t build_id_{1};
     std::uint32_t network_update_{};
     std::uint32_t next_input_sequence_{1};

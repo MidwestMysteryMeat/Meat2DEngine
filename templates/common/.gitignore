@@ -1,0 +1,16 @@
+/build/
+/dist/
+/.vs/
+/.vscode/
+*.user
+*.suo
+*.obj
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+.DS_Store
+Thumbs.db

@@ -28,6 +28,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "MEAT2D_BUILD_CLIENT": "OFF",
+        "MEAT2D_BUILD_LAUNCHER": "OFF",
         "MEAT2D_BUILD_SERVER": "ON",
         "MEAT2D_BUILD_TESTS": "ON",
         "MEAT2D_BUILD_BENCHMARKS": "ON"

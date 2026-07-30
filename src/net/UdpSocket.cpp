@@ -6,8 +6,8 @@
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
-#include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <WinSock2.h>
 #else
 #include <arpa/inet.h>
 #include <cerrno>
@@ -88,9 +88,7 @@ struct UdpSocket::Impl {
     std::string last_error;
 };
 
-std::optional<Endpoint> resolve_endpoint(
-    std::string_view host,
-    std::uint16_t port) {
+std::optional<Endpoint> resolve_endpoint(std::string_view host, std::uint16_t port) {
     if (host.empty() || port == 0U || !sockets_ready()) {
         return std::nullopt;
     }
@@ -105,8 +103,7 @@ std::optional<Endpoint> resolve_endpoint(
         hints.ai_socktype = SOCK_DGRAM;
         addrinfo* result = nullptr;
         const auto service = std::to_string(port);
-        const auto status =
-            getaddrinfo(host_text.c_str(), service.c_str(), &hints, &result);
+        const auto status = getaddrinfo(host_text.c_str(), service.c_str(), &hints, &result);
         if (status != 0 || result == nullptr) {
             if (result != nullptr) {
                 freeaddrinfo(result);
@@ -118,11 +115,8 @@ std::optional<Endpoint> resolve_endpoint(
     }
 
     std::array<char, INET_ADDRSTRLEN> address_text{};
-    if (inet_ntop(
-            AF_INET,
-            &address.sin_addr,
-            address_text.data(),
-            static_cast<SocketLength>(address_text.size())) == nullptr) {
+    if (inet_ntop(AF_INET, &address.sin_addr, address_text.data(),
+                  static_cast<SocketLength>(address_text.size())) == nullptr) {
         return std::nullopt;
     }
     return Endpoint{
@@ -191,10 +185,8 @@ bool UdpSocket::open(std::uint16_t port, std::string_view bind_address) {
         return false;
     }
 
-    if (::bind(
-            impl_->socket,
-            reinterpret_cast<const sockaddr*>(&address),
-            static_cast<SocketLength>(sizeof(address))) != 0) {
+    if (::bind(impl_->socket, reinterpret_cast<const sockaddr*>(&address),
+               static_cast<SocketLength>(sizeof(address))) != 0) {
         impl_->last_error = describe_error("bind", socket_error());
         close();
         return false;
@@ -202,10 +194,7 @@ bool UdpSocket::open(std::uint16_t port, std::string_view bind_address) {
 
     sockaddr_in bound{};
     SocketLength bound_size = static_cast<SocketLength>(sizeof(bound));
-    if (getsockname(
-            impl_->socket,
-            reinterpret_cast<sockaddr*>(&bound),
-            &bound_size) != 0) {
+    if (getsockname(impl_->socket, reinterpret_cast<sockaddr*>(&bound), &bound_size) != 0) {
         impl_->last_error = describe_error("getsockname", socket_error());
         close();
         return false;
@@ -231,11 +220,32 @@ std::uint16_t UdpSocket::local_port() const noexcept {
     return impl_ != nullptr ? impl_->local_port : 0U;
 }
 
-bool UdpSocket::send(
-    const Endpoint& endpoint,
-    std::span<const std::uint8_t> bytes) {
-    if (!valid() || endpoint.port == 0U || bytes.empty() ||
-        bytes.size() > maximum_datagram_bytes) {
+bool UdpSocket::enable_broadcast(bool enabled) {
+    if (!valid()) {
+        if (impl_ != nullptr) {
+            impl_->last_error = "cannot configure a closed UDP socket";
+        }
+        return false;
+    }
+    const int value = enabled ? 1 : 0;
+#if defined(_WIN32)
+    const auto result =
+        setsockopt(impl_->socket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&value),
+                   static_cast<int>(sizeof(value)));
+#else
+    const auto result = setsockopt(impl_->socket, SOL_SOCKET, SO_BROADCAST, &value,
+                                   static_cast<SocketLength>(sizeof(value)));
+#endif
+    if (result != 0) {
+        impl_->last_error = describe_error("setsockopt(SO_BROADCAST)", socket_error());
+        return false;
+    }
+    impl_->last_error.clear();
+    return true;
+}
+
+bool UdpSocket::send(const Endpoint& endpoint, std::span<const std::uint8_t> bytes) {
+    if (!valid() || endpoint.port == 0U || bytes.empty() || bytes.size() > maximum_datagram_bytes) {
         if (impl_ != nullptr) {
             impl_->last_error = "invalid UDP send request";
         }
@@ -254,21 +264,12 @@ bool UdpSocket::send(
 
 #if defined(_WIN32)
     const auto sent = sendto(
-        impl_->socket,
-        reinterpret_cast<const char*>(bytes.data()),
-        static_cast<int>(bytes.size()),
-        0,
-        reinterpret_cast<const sockaddr*>(&address),
-        static_cast<int>(sizeof(address)));
+        impl_->socket, reinterpret_cast<const char*>(bytes.data()), static_cast<int>(bytes.size()),
+        0, reinterpret_cast<const sockaddr*>(&address), static_cast<int>(sizeof(address)));
     const bool complete = sent == static_cast<int>(bytes.size());
 #else
-    const auto sent = sendto(
-        impl_->socket,
-        bytes.data(),
-        bytes.size(),
-        0,
-        reinterpret_cast<const sockaddr*>(&address),
-        sizeof(address));
+    const auto sent = sendto(impl_->socket, bytes.data(), bytes.size(), 0,
+                             reinterpret_cast<const sockaddr*>(&address), sizeof(address));
     const bool complete = sent == static_cast<ssize_t>(bytes.size());
 #endif
     if (!complete) {
@@ -288,22 +289,13 @@ std::optional<Datagram> UdpSocket::receive() {
     sockaddr_in sender{};
     SocketLength sender_size = static_cast<SocketLength>(sizeof(sender));
 #if defined(_WIN32)
-    const auto received = recvfrom(
-        impl_->socket,
-        reinterpret_cast<char*>(buffer.data()),
-        static_cast<int>(buffer.size()),
-        0,
-        reinterpret_cast<sockaddr*>(&sender),
-        &sender_size);
+    const auto received = recvfrom(impl_->socket, reinterpret_cast<char*>(buffer.data()),
+                                   static_cast<int>(buffer.size()), 0,
+                                   reinterpret_cast<sockaddr*>(&sender), &sender_size);
     if (received == SOCKET_ERROR) {
 #else
-    const auto received = recvfrom(
-        impl_->socket,
-        buffer.data(),
-        buffer.size(),
-        0,
-        reinterpret_cast<sockaddr*>(&sender),
-        &sender_size);
+    const auto received = recvfrom(impl_->socket, buffer.data(), buffer.size(), 0,
+                                   reinterpret_cast<sockaddr*>(&sender), &sender_size);
     if (received < 0) {
 #endif
         const auto error = socket_error();
@@ -316,11 +308,8 @@ std::optional<Datagram> UdpSocket::receive() {
     }
 
     std::array<char, INET_ADDRSTRLEN> address_text{};
-    if (inet_ntop(
-            AF_INET,
-            &sender.sin_addr,
-            address_text.data(),
-            static_cast<SocketLength>(address_text.size())) == nullptr) {
+    if (inet_ntop(AF_INET, &sender.sin_addr, address_text.data(),
+                  static_cast<SocketLength>(address_text.size())) == nullptr) {
         impl_->last_error = describe_error("inet_ntop", socket_error());
         return std::nullopt;
     }
@@ -331,10 +320,8 @@ std::optional<Datagram> UdpSocket::receive() {
                 .address = address_text.data(),
                 .port = ntohs(sender.sin_port),
             },
-        .bytes =
-            std::vector<std::uint8_t>(
-                buffer.begin(),
-                buffer.begin() + static_cast<std::ptrdiff_t>(received)),
+        .bytes = std::vector<std::uint8_t>(buffer.begin(),
+                                           buffer.begin() + static_cast<std::ptrdiff_t>(received)),
     };
 }
 

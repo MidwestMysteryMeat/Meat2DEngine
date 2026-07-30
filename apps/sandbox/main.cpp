@@ -30,7 +30,10 @@ struct Viewport {
 struct LaunchOptions {
     std::uint64_t frame_limit{};
     std::uint16_t port{meat2d::net::default_port};
+    std::uint16_t directory_port{meat2d::net::default_directory_port};
+    std::uint64_t server_id{};
     std::string host;
+    std::string directory_host{"127.0.0.1"};
     std::string player_name{"Living Lab"};
 };
 
@@ -39,10 +42,8 @@ Viewport calculate_viewport(SDL_Renderer* renderer, const meat2d::World& world) 
     int output_height = 1;
     SDL_GetRenderOutputSize(renderer, &output_width, &output_height);
 
-    const float scale_x =
-        static_cast<float>(output_width) / static_cast<float>(world.width());
-    const float scale_y =
-        static_cast<float>(output_height) / static_cast<float>(world.height());
+    const float scale_x = static_cast<float>(output_width) / static_cast<float>(world.width());
+    const float scale_y = static_cast<float>(output_height) / static_cast<float>(world.height());
     const float scale = std::max(1.0F, std::min(scale_x, scale_y));
     const float width = static_cast<float>(world.width()) * scale;
     const float height = static_cast<float>(world.height()) * scale;
@@ -59,10 +60,8 @@ Viewport calculate_viewport(SDL_Renderer* renderer, const meat2d::World& world) 
 
 meat2d::Vec2i mouse_to_world(float mouse_x, float mouse_y, const Viewport& viewport) {
     return {
-        static_cast<std::int32_t>(
-            std::floor((mouse_x - viewport.destination.x) / viewport.scale)),
-        static_cast<std::int32_t>(
-            std::floor((mouse_y - viewport.destination.y) / viewport.scale)),
+        static_cast<std::int32_t>(std::floor((mouse_x - viewport.destination.x) / viewport.scale)),
+        static_cast<std::int32_t>(std::floor((mouse_y - viewport.destination.y) / viewport.scale)),
     };
 }
 
@@ -76,10 +75,8 @@ meat2d::MaterialId cycle_material(meat2d::MaterialId current, int direction) {
     return static_cast<meat2d::MaterialId>((current_index + direction + count) % count);
 }
 
-template <typename Integer>
-void parse_integer(std::string_view text, Integer& output) {
-    const auto result =
-        std::from_chars(text.data(), text.data() + text.size(), output);
+template <typename Integer> void parse_integer(std::string_view text, Integer& output) {
+    const auto result = std::from_chars(text.data(), text.data() + text.size(), output);
     if (result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
         output = 0;
     }
@@ -95,6 +92,12 @@ LaunchOptions parse_options(int argc, char** argv) {
             options.host = argv[++index];
         } else if (argument == "--port" && index + 1 < argc) {
             parse_integer(std::string_view(argv[++index]), options.port);
+        } else if (argument == "--directory" && index + 1 < argc) {
+            options.directory_host = argv[++index];
+        } else if (argument == "--directory-port" && index + 1 < argc) {
+            parse_integer(std::string_view(argv[++index]), options.directory_port);
+        } else if (argument == "--server-id" && index + 1 < argc) {
+            parse_integer(std::string_view(argv[++index]), options.server_id);
         } else if (argument == "--name" && index + 1 < argc) {
             options.player_name = argv[++index];
         }
@@ -102,16 +105,9 @@ LaunchOptions parse_options(int argc, char** argv) {
     return options;
 }
 
-SDL_Texture* create_world_texture(
-    SDL_Renderer* renderer,
-    std::int32_t width,
-    std::int32_t height) {
-    auto* texture = SDL_CreateTexture(
-        renderer,
-        SDL_PIXELFORMAT_RGBA32,
-        SDL_TEXTUREACCESS_STREAMING,
-        width,
-        height);
+SDL_Texture* create_world_texture(SDL_Renderer* renderer, std::int32_t width, std::int32_t height) {
+    auto* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING,
+                                      width, height);
     if (texture != nullptr) {
         SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
@@ -131,33 +127,19 @@ void seed_living_lab(meat2d::ai::LivingSimulation& simulation) {
         world.set_material({x, floor_y - 1}, meat2d::MaterialId::Debris);
     }
 
-    simulation.spawn_agent(
-        meat2d::ai::AgentKind::Grazer,
-        {world.width() / 4 - 7, floor_y - 1});
-    simulation.spawn_agent(
-        meat2d::ai::AgentKind::Grazer,
-        {world.width() / 3, floor_y - 2});
-    simulation.spawn_agent(
-        meat2d::ai::AgentKind::Predator,
-        {world.width() / 2 - 12, floor_y - 1});
-    simulation.spawn_agent(
-        meat2d::ai::AgentKind::Worker,
-        {world.width() * 2 / 3, floor_y - 1});
+    simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {world.width() / 4 - 7, floor_y - 1});
+    simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {world.width() / 3, floor_y - 2});
+    simulation.spawn_agent(meat2d::ai::AgentKind::Predator, {world.width() / 2 - 12, floor_y - 1});
+    simulation.spawn_agent(meat2d::ai::AgentKind::Worker, {world.width() * 2 / 3, floor_y - 1});
 
     for (std::int32_t y = floor_y - 8; y <= floor_y - 4; ++y) {
         for (std::int32_t x = world.width() / 10; x <= world.width() / 10 + 6; ++x) {
-            simulation.organisms().seed(
-                {x, y},
-                meat2d::life::photosynthetic_genome,
-                1'100);
+            simulation.organisms().seed({x, y}, meat2d::life::photosynthetic_genome, 1'100);
         }
     }
     for (std::int32_t y = floor_y - 5; y <= floor_y - 2; ++y) {
         for (std::int32_t x = world.width() / 3; x <= world.width() / 3 + 5; ++x) {
-            simulation.organisms().seed(
-                {x, y},
-                meat2d::life::decomposer_genome,
-                1'100);
+            simulation.organisms().seed({x, y}, meat2d::life::decomposer_genome, 1'100);
         }
     }
 }
@@ -174,9 +156,8 @@ meat2d::Rgba8 agent_color(meat2d::ai::AgentKind kind) {
     return {255, 255, 255, 255};
 }
 
-void rasterize_agents(
-    const meat2d::ai::LivingSimulation& simulation,
-    std::vector<std::uint8_t>& pixels) {
+void rasterize_agents(const meat2d::ai::LivingSimulation& simulation,
+                      std::vector<std::uint8_t>& pixels) {
     const auto& world = simulation.world();
     for (const auto& agent : simulation.agents()) {
         const auto color = agent_color(agent.kind);
@@ -198,9 +179,8 @@ void rasterize_agents(
     }
 }
 
-void rasterize_organisms(
-    const meat2d::ai::LivingSimulation& simulation,
-    std::vector<std::uint8_t>& pixels) {
+void rasterize_organisms(const meat2d::ai::LivingSimulation& simulation,
+                         std::vector<std::uint8_t>& pixels) {
     const auto& field = simulation.organisms();
     const auto cells = field.cells();
     for (std::int32_t y = 0; y < field.height(); ++y) {
@@ -216,10 +196,10 @@ void rasterize_organisms(
             const auto pixel = index * 4U;
             pixels[pixel] =
                 static_cast<std::uint8_t>((static_cast<int>(pixels[pixel]) + color.r * 2) / 3);
-            pixels[pixel + 1U] = static_cast<std::uint8_t>(
-                (static_cast<int>(pixels[pixel + 1U]) + color.g * 2) / 3);
-            pixels[pixel + 2U] = static_cast<std::uint8_t>(
-                (static_cast<int>(pixels[pixel + 2U]) + color.b * 2) / 3);
+            pixels[pixel + 1U] =
+                static_cast<std::uint8_t>((static_cast<int>(pixels[pixel + 1U]) + color.g * 2) / 3);
+            pixels[pixel + 2U] =
+                static_cast<std::uint8_t>((static_cast<int>(pixels[pixel + 2U]) + color.b * 2) / 3);
         }
     }
 }
@@ -234,11 +214,8 @@ const char* organism_name(std::uint32_t genome) {
     return "extremophile";
 }
 
-void seed_organism_brush(
-    meat2d::life::OrganismField& field,
-    meat2d::Vec2i center,
-    int radius,
-    std::uint32_t genome) {
+void seed_organism_brush(meat2d::life::OrganismField& field, meat2d::Vec2i center, int radius,
+                         std::uint32_t genome) {
     const auto radius_squared = radius * radius;
     for (std::int32_t y = center.y - radius; y <= center.y + radius; ++y) {
         for (std::int32_t x = center.x - radius; x <= center.x + radius; ++x) {
@@ -255,10 +232,7 @@ void seed_organism_brush(
 
 int main(int argc, char** argv) {
     const auto options = parse_options(argc, argv);
-    SDL_SetAppMetadata(
-        "Meat2D Living Lab",
-        meat2d::version_string.data(),
-        "games.meat2d.sandbox");
+    SDL_SetAppMetadata("Meat2D Living Lab", meat2d::version_string.data(), "games.meat2d.sandbox");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         std::fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
         return 1;
@@ -266,13 +240,9 @@ int main(int argc, char** argv) {
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
-    if (!SDL_CreateWindowAndRenderer(
-            "Meat2D Living Lab",
-            1280,
-            720,
-            SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY,
-            &window,
-            &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("Meat2D Living Lab", 1280, 720,
+                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, &window,
+                                     &renderer)) {
         std::fprintf(stderr, "Window creation failed: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
@@ -287,18 +257,23 @@ int main(int argc, char** argv) {
     meat2d::ai::LivingSimulation simulation(world_config);
     seed_living_lab(simulation);
     meat2d::net::AuthoritativeClient remote;
-    const bool remote_mode = !options.host.empty();
-    if (remote_mode &&
-        !remote.connect(
-            {
-                .address = options.host,
-                .port = options.port,
-            },
-            options.player_name)) {
-        std::fprintf(
-            stderr,
-            "Network connection start failed: %s\n",
-            std::string(remote.last_error()).c_str());
+    const bool remote_mode = !options.host.empty() || options.server_id != 0U;
+    const bool connection_started =
+        !remote_mode || (options.server_id == 0U ? remote.connect(
+                                                       {
+                                                           .address = options.host,
+                                                           .port = options.port,
+                                                       },
+                                                       options.player_name)
+                                                 : remote.connect_via_directory(
+                                                       {
+                                                           .address = options.directory_host,
+                                                           .port = options.directory_port,
+                                                       },
+                                                       options.server_id, options.player_name));
+    if (!connection_started) {
+        std::fprintf(stderr, "Network connection start failed: %s\n",
+                     std::string(remote.last_error()).c_str());
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -307,8 +282,7 @@ int main(int argc, char** argv) {
     auto texture_width = simulation.world().width();
     auto texture_height = simulation.world().height();
 
-    SDL_Texture* texture =
-        create_world_texture(renderer, texture_width, texture_height);
+    SDL_Texture* texture = create_world_texture(renderer, texture_width, texture_height);
     if (texture == nullptr) {
         std::fprintf(stderr, "Texture creation failed: %s\n", SDL_GetError());
         SDL_DestroyRenderer(renderer);
@@ -316,9 +290,8 @@ int main(int argc, char** argv) {
         SDL_Quit();
         return 1;
     }
-    std::vector<std::uint8_t> pixels(
-        static_cast<std::size_t>(texture_width) *
-        static_cast<std::size_t>(texture_height) * 4U);
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(texture_width) *
+                                     static_cast<std::size_t>(texture_height) * 4U);
 
     bool running = true;
     bool paused = false;
@@ -412,23 +385,18 @@ int main(int argc, char** argv) {
                     break;
                 }
             } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                brush_radius = std::clamp(
-                    brush_radius + static_cast<int>(event.wheel.y),
-                    1,
-                    32);
+                brush_radius = std::clamp(brush_radius + static_cast<int>(event.wheel.y), 1, 32);
             }
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const double frame_seconds =
-            std::chrono::duration<double>(now - previous).count();
+        const double frame_seconds = std::chrono::duration<double>(now - previous).count();
         previous = now;
         accumulator += std::min(frame_seconds, 0.25);
 
-        const meat2d::World* displayed_world =
-            remote_mode && remote.replicated_world() != nullptr
-                ? remote.replicated_world()
-                : &simulation.world();
+        const meat2d::World* displayed_world = remote_mode && remote.replicated_world() != nullptr
+                                                   ? remote.replicated_world()
+                                                   : &simulation.world();
         const auto viewport = calculate_viewport(renderer, *displayed_world);
         float mouse_x = 0.0F;
         float mouse_y = 0.0F;
@@ -438,16 +406,10 @@ int main(int argc, char** argv) {
             if ((mouse_buttons & SDL_BUTTON_LMASK) != 0U) {
                 simulation.world().paint_disc(mouse_cell, brush_radius, brush);
             } else if ((mouse_buttons & SDL_BUTTON_RMASK) != 0U) {
-                simulation.world().paint_disc(
-                    mouse_cell,
-                    brush_radius,
-                    meat2d::MaterialId::Empty);
+                simulation.world().paint_disc(mouse_cell, brush_radius, meat2d::MaterialId::Empty);
             } else if ((mouse_buttons & SDL_BUTTON_MMASK) != 0U) {
-                seed_organism_brush(
-                    simulation.organisms(),
-                    mouse_cell,
-                    std::max(1, brush_radius / 2),
-                    organism_brush);
+                seed_organism_brush(simulation.organisms(), mouse_cell,
+                                    std::max(1, brush_radius / 2), organism_brush);
             }
         }
 
@@ -461,10 +423,7 @@ int main(int argc, char** argv) {
                     if ((mouse_buttons & SDL_BUTTON_LMASK) != 0U) {
                         remote.paint(mouse_cell, brush, network_radius);
                     } else if ((mouse_buttons & SDL_BUTTON_RMASK) != 0U) {
-                        remote.paint(
-                            mouse_cell,
-                            meat2d::MaterialId::Empty,
-                            network_radius);
+                        remote.paint(mouse_cell, meat2d::MaterialId::Empty, network_radius);
                     } else if (network_steps % 15U == 0U) {
                         remote.set_focus(mouse_cell);
                     }
@@ -483,10 +442,9 @@ int main(int argc, char** argv) {
             }
         }
 
-        displayed_world =
-            remote_mode && remote.replicated_world() != nullptr
-                ? remote.replicated_world()
-                : &simulation.world();
+        displayed_world = remote_mode && remote.replicated_world() != nullptr
+                              ? remote.replicated_world()
+                              : &simulation.world();
         if (displayed_world->width() != texture_width ||
             displayed_world->height() != texture_height) {
             SDL_DestroyTexture(texture);
@@ -498,10 +456,9 @@ int main(int argc, char** argv) {
                 running = false;
                 continue;
             }
-            pixels.assign(
-                static_cast<std::size_t>(texture_width) *
-                    static_cast<std::size_t>(texture_height) * 4U,
-                0U);
+            pixels.assign(static_cast<std::size_t>(texture_width) *
+                              static_cast<std::size_t>(texture_height) * 4U,
+                          0U);
         }
 
         displayed_world->rasterize_rgba(pixels);
@@ -509,19 +466,11 @@ int main(int argc, char** argv) {
             rasterize_organisms(simulation, pixels);
             rasterize_agents(simulation, pixels);
         }
-        SDL_UpdateTexture(
-            texture,
-            nullptr,
-            pixels.data(),
-            displayed_world->width() * 4);
+        SDL_UpdateTexture(texture, nullptr, pixels.data(), displayed_world->width() * 4);
         SDL_SetRenderDrawColor(renderer, 5, 7, 12, 255);
         SDL_RenderClear(renderer);
         const auto render_viewport = calculate_viewport(renderer, *displayed_world);
-        SDL_RenderTexture(
-            renderer,
-            texture,
-            nullptr,
-            &render_viewport.destination);
+        SDL_RenderTexture(renderer, texture, nullptr, &render_viewport.destination);
         SDL_RenderPresent(renderer);
         ++rendered_frames;
         if (options.frame_limit != 0 && rendered_frames >= options.frame_limit) {
@@ -533,42 +482,27 @@ int main(int argc, char** argv) {
             std::string title;
             if (remote_mode) {
                 const auto snapshot = remote.latest_snapshot();
-                const auto connection =
-                    remote.connected() ? "ONLINE client " +
-                                             std::to_string(remote.client_id())
-                                       : "CONNECTING";
-                title =
-                    "Meat2D Living Lab | " + connection + " | " +
-                    std::string(material_name(brush)) +
-                    " r=" + std::to_string(std::min(brush_radius, 8)) +
-                    " | server tick " +
-                    std::to_string(snapshot ? snapshot->server_tick : 0U) +
-                    " | agents " +
-                    std::to_string(snapshot ? snapshot->agent_count : 0U) +
-                    " | organisms " +
-                    std::to_string(
-                        snapshot ? snapshot->organism_population : 0U) +
-                    " | chunks " +
-                    std::to_string(last_network_stats.completed_chunks);
+                const auto connection = remote.connected()
+                                            ? "ONLINE client " + std::to_string(remote.client_id())
+                                            : "CONNECTING";
+                title = "Meat2D Living Lab | " + connection + " | " +
+                        std::string(material_name(brush)) +
+                        " r=" + std::to_string(std::min(brush_radius, 8)) + " | server tick " +
+                        std::to_string(snapshot ? snapshot->server_tick : 0U) + " | agents " +
+                        std::to_string(snapshot ? snapshot->agent_count : 0U) + " | organisms " +
+                        std::to_string(snapshot ? snapshot->organism_population : 0U) +
+                        " | chunks " + std::to_string(last_network_stats.completed_chunks);
             } else {
-                title =
-                    "Meat2D Living Lab | " + std::string(material_name(brush)) +
-                    " | microbe " + organism_name(organism_brush) +
-                    " r=" + std::to_string(brush_radius) +
-                    (paused ? " | PAUSED" : "") +
-                    " | tick " +
-                    std::to_string(simulation.world().current_tick()) +
-                    " | agents " + std::to_string(simulation.agents().size()) +
-                    " | organisms " +
-                    std::to_string(simulation.organisms().population()) +
-                    " | moved " +
-                    std::to_string(last_stats.world.moved_cells) +
-                    " | reacted " +
-                    std::to_string(last_stats.world.reacted_cells) +
-                    " | commands " +
-                    std::to_string(last_stats.applied_commands) +
-                    " | active chunks " +
-                    std::to_string(last_stats.world.active_chunks);
+                title = "Meat2D Living Lab | " + std::string(material_name(brush)) + " | microbe " +
+                        organism_name(organism_brush) + " r=" + std::to_string(brush_radius) +
+                        (paused ? " | PAUSED" : "") + " | tick " +
+                        std::to_string(simulation.world().current_tick()) + " | agents " +
+                        std::to_string(simulation.agents().size()) + " | organisms " +
+                        std::to_string(simulation.organisms().population()) + " | moved " +
+                        std::to_string(last_stats.world.moved_cells) + " | reacted " +
+                        std::to_string(last_stats.world.reacted_cells) + " | commands " +
+                        std::to_string(last_stats.applied_commands) + " | active chunks " +
+                        std::to_string(last_stats.world.active_chunks);
             }
             SDL_SetWindowTitle(window, title.c_str());
         }

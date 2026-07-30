@@ -1,5 +1,7 @@
 #include "meat2d/ai/LivingSimulation.hpp"
+#include "meat2d/assets/SpriteSheet.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
+#include "meat2d/net/Discovery.hpp"
 #include "meat2d/net/Fragmentation.hpp"
 #include "meat2d/net/PacketCodec.hpp"
 #include "meat2d/net/Protocol.hpp"
@@ -8,12 +10,16 @@
 #include "meat2d/net/UdpSocket.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
+#include "meat2d/tools/ProjectBrowser.hpp"
+#include "meat2d/tools/ProjectManager.hpp"
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -34,15 +40,10 @@ void check(bool condition, const std::string& message) {
 
 void test_cell_layout_and_protocol() {
     check(sizeof(meat2d::Cell) == 8, "authoritative cell must remain eight bytes");
-    check(
-        sizeof(meat2d::life::OrganismCell) == 8,
-        "authoritative organism cell must remain eight bytes");
-    check(
-        sizeof(meat2d::net::PacketHeader) == 28,
-        "network header layout unexpectedly changed");
-    check(
-        meat2d::net::maximum_players == 8,
-        "first multiplayer target must remain eight players");
+    check(sizeof(meat2d::life::OrganismCell) == 8,
+          "authoritative organism cell must remain eight bytes");
+    check(sizeof(meat2d::net::PacketHeader) == 28, "network header layout unexpectedly changed");
+    check(meat2d::net::maximum_players == 8, "first multiplayer target must remain eight players");
 }
 
 void test_material_catalog() {
@@ -53,12 +54,10 @@ void test_material_catalog() {
         check(!definition.name.empty(), "catalog contains an unnamed material");
         check(definition.color.a != 0U, "catalog material is fully transparent");
     }
-    check(
-        !meat2d::is_valid(meat2d::MaterialId::Count),
-        "Count sentinel must not be a usable material");
-    check(
-        meat2d::has_flag(meat2d::MaterialId::Metal, meat2d::MaterialFlags::Conductive),
-        "metal lost its conductive property");
+    check(!meat2d::is_valid(meat2d::MaterialId::Count),
+          "Count sentinel must not be a usable material");
+    check(meat2d::has_flag(meat2d::MaterialId::Metal, meat2d::MaterialFlags::Conductive),
+          "metal lost its conductive property");
 }
 
 void test_packet_codec() {
@@ -79,43 +78,33 @@ void test_packet_codec() {
     header.server_tick = 900;
     const auto datagram = meat2d::net::encode_packet(header, *hello_payload);
     check(datagram.has_value(), "valid packet did not encode");
-    check(
-        datagram->size() <= meat2d::net::maximum_datagram_bytes,
-        "encoded packet exceeded the safe datagram budget");
+    check(datagram->size() <= meat2d::net::maximum_datagram_bytes,
+          "encoded packet exceeded the safe datagram budget");
 
     const auto packet = meat2d::net::decode_packet(*datagram);
     check(packet.has_value(), "encoded packet did not decode");
-    check(
-        packet && packet->header.sequence == header.sequence,
-        "packet sequence changed during serialization");
-    check(
-        packet && packet->header.acknowledgement_bits == header.acknowledgement_bits,
-        "packet acknowledgement window changed during serialization");
-    const auto decoded_hello =
-        packet ? meat2d::net::decode_hello(packet->payload) : std::nullopt;
+    check(packet && packet->header.sequence == header.sequence,
+          "packet sequence changed during serialization");
+    check(packet && packet->header.acknowledgement_bits == header.acknowledgement_bits,
+          "packet acknowledgement window changed during serialization");
+    const auto decoded_hello = packet ? meat2d::net::decode_hello(packet->payload) : std::nullopt;
     check(decoded_hello.has_value(), "hello message did not decode");
-    check(
-        decoded_hello && decoded_hello->player_name == hello.player_name,
-        "player name changed during serialization");
-    check(
-        decoded_hello && decoded_hello->client_nonce == hello.client_nonce,
-        "client nonce changed during serialization");
+    check(decoded_hello && decoded_hello->player_name == hello.player_name,
+          "player name changed during serialization");
+    check(decoded_hello && decoded_hello->client_nonce == hello.client_nonce,
+          "client nonce changed during serialization");
 
     auto truncated = *datagram;
     truncated.pop_back();
-    check(
-        !meat2d::net::decode_packet(truncated).has_value(),
-        "truncated datagram was accepted");
+    check(!meat2d::net::decode_packet(truncated).has_value(), "truncated datagram was accepted");
     auto bad_magic = *datagram;
     bad_magic[0] ^= 0xFFU;
-    check(
-        !meat2d::net::decode_packet(bad_magic).has_value(),
-        "datagram with invalid protocol magic was accepted");
+    check(!meat2d::net::decode_packet(bad_magic).has_value(),
+          "datagram with invalid protocol magic was accepted");
     auto bad_flags = *datagram;
     bad_flags[7] = 0x80U;
-    check(
-        !meat2d::net::decode_packet(bad_flags).has_value(),
-        "datagram with unknown packet flags was accepted");
+    check(!meat2d::net::decode_packet(bad_flags).has_value(),
+          "datagram with unknown packet flags was accepted");
 
     const meat2d::net::InputMessage input{
         .session_token = 0xDEADBEEFCAFEBABEULL,
@@ -127,30 +116,26 @@ void test_packet_codec() {
         .material = meat2d::MaterialId::Lava,
         .radius = 8,
     };
-    const auto decoded_input =
-        meat2d::net::decode_input(meat2d::net::encode_input(input));
+    const auto decoded_input = meat2d::net::decode_input(meat2d::net::encode_input(input));
     check(decoded_input.has_value(), "input message did not decode");
-    check(
-        decoded_input && decoded_input->target == input.target &&
-            decoded_input->material == input.material &&
-            decoded_input->session_token == input.session_token,
-        "input message changed during serialization");
+    check(decoded_input && decoded_input->target == input.target &&
+              decoded_input->material == input.material &&
+              decoded_input->session_token == input.session_token,
+          "input message changed during serialization");
 
-    const auto oversized_welcome = meat2d::net::decode_welcome(
-        meat2d::net::encode_welcome({
-            .client_nonce = 1,
-            .session_token = 2,
-            .world_seed = 3,
-            .server_tick = 4,
-            .world_width = meat2d::net::maximum_network_world_dimension,
-            .world_height = meat2d::net::maximum_network_world_dimension,
-            .tick_rate = 60,
-            .client_id = 1,
-            .maximum_clients = 2,
-        }));
-    check(
-        !oversized_welcome.has_value(),
-        "welcome message could request an unsafe client allocation");
+    const auto oversized_welcome = meat2d::net::decode_welcome(meat2d::net::encode_welcome({
+        .client_nonce = 1,
+        .session_token = 2,
+        .world_seed = 3,
+        .server_tick = 4,
+        .world_width = meat2d::net::maximum_network_world_dimension,
+        .world_height = meat2d::net::maximum_network_world_dimension,
+        .tick_rate = 60,
+        .client_id = 1,
+        .maximum_clients = 2,
+    }));
+    check(!oversized_welcome.has_value(),
+          "welcome message could request an unsafe client allocation");
 }
 
 void test_reliable_sequence_window() {
@@ -160,18 +145,12 @@ void test_reliable_sequence_window() {
     check(tracker.observe(101), "out-of-order sequence inside the window was rejected");
     check(!tracker.observe(101), "duplicate sequence was accepted");
     check(tracker.acknowledgement() == 102, "latest acknowledgement is incorrect");
-    check(
-        meat2d::net::sequence_acknowledged(
-            100,
-            tracker.acknowledgement(),
-            tracker.acknowledgement_bits()),
-        "acknowledgement bits lost an older sequence");
-    check(
-        meat2d::net::sequence_acknowledged(
-            101,
-            tracker.acknowledgement(),
-            tracker.acknowledgement_bits()),
-        "acknowledgement bits lost an out-of-order sequence");
+    check(meat2d::net::sequence_acknowledged(100, tracker.acknowledgement(),
+                                             tracker.acknowledgement_bits()),
+          "acknowledgement bits lost an older sequence");
+    check(meat2d::net::sequence_acknowledged(101, tracker.acknowledgement(),
+                                             tracker.acknowledgement_bits()),
+          "acknowledgement bits lost an out-of-order sequence");
 
     meat2d::net::AcknowledgementTracker wrapped;
     wrapped.observe(std::numeric_limits<std::uint32_t>::max());
@@ -185,12 +164,7 @@ void test_reliable_sequence_window() {
     });
     meat2d::net::ReliableChannel receiver;
     const std::array<std::uint8_t, 3> payload{1, 2, 3};
-    const auto initial = sender.make_packet(
-        meat2d::net::PacketType::Welcome,
-        payload,
-        0,
-        0,
-        true);
+    const auto initial = sender.make_packet(meat2d::net::PacketType::Welcome, payload, 0, 0, true);
     check(initial.header.sequence == 1, "reliable sequence did not start at one");
     check(sender.pending_packets() == 1, "reliable packet was not retained");
 
@@ -200,18 +174,13 @@ void test_reliable_sequence_window() {
 
     retransmissions = sender.collect_retransmissions(4, 4);
     check(retransmissions.size() == 1, "unacknowledged packet stopped retransmitting");
-    check(
-        !receiver.receive(retransmissions.front().header),
-        "duplicate retransmission was accepted twice");
+    check(!receiver.receive(retransmissions.front().header),
+          "duplicate retransmission was accepted twice");
     const auto acknowledgement = receiver.make_acknowledgement(4, 4);
     sender.receive(acknowledgement.header);
     check(sender.pending_packets() == 0, "acknowledged packet remained pending");
-    check(
-        sender.stats().retransmissions == 2,
-        "retransmission statistics are incorrect");
-    check(
-        receiver.stats().duplicates_received == 1,
-        "duplicate receive statistics are incorrect");
+    check(sender.stats().retransmissions == 2, "retransmission statistics are incorrect");
+    check(receiver.stats().duplicates_received == 1, "duplicate receive statistics are incorrect");
 }
 
 void test_chunk_delta_fragmentation() {
@@ -223,28 +192,23 @@ void test_chunk_delta_fragmentation() {
     });
     for (int y = 0; y < meat2d::chunk_size; ++y) {
         for (int x = 0; x < meat2d::chunk_size; ++x) {
-            source.set_material(
-                {x, y},
-                ((x + y) & 1) == 0 ? meat2d::MaterialId::Stone
-                                   : meat2d::MaterialId::Wood);
+            source.set_material({x, y}, ((x + y) & 1) == 0 ? meat2d::MaterialId::Stone
+                                                           : meat2d::MaterialId::Wood);
         }
     }
 
     const auto encoded = meat2d::net::encode_chunk_delta(source, 0);
     check(encoded.has_value(), "valid chunk delta did not encode");
-    check(
-        encoded && encoded->size() > meat2d::net::maximum_fragment_data_bytes,
-        "large chunk delta did not exercise fragmentation");
+    check(encoded && encoded->size() > meat2d::net::maximum_fragment_data_bytes,
+          "large chunk delta did not exercise fragmentation");
 
-    const auto fragments =
-        encoded ? meat2d::net::fragment_payload(77, *encoded)
-                : std::vector<std::vector<std::uint8_t>>{};
+    const auto fragments = encoded ? meat2d::net::fragment_payload(77, *encoded)
+                                   : std::vector<std::vector<std::uint8_t>>{};
     check(fragments.size() > 1, "chunk delta was not split into MTU-safe fragments");
     for (const auto& fragment : fragments) {
-        check(
-            fragment.size() + meat2d::net::encoded_header_bytes <=
-                meat2d::net::maximum_datagram_bytes,
-            "fragment exceeded the datagram budget");
+        check(fragment.size() + meat2d::net::encoded_header_bytes <=
+                  meat2d::net::maximum_datagram_bytes,
+              "fragment exceeded the datagram budget");
     }
 
     meat2d::net::FragmentAssembler assembler;
@@ -269,31 +233,26 @@ void test_chunk_delta_fragmentation() {
     const auto applied =
         completed ? meat2d::net::apply_chunk_delta(target, *completed) : std::nullopt;
     check(applied.has_value(), "reassembled chunk delta did not apply");
-    check(
-        applied && applied->changed_cells == meat2d::cells_per_chunk,
-        "chunk delta did not update every encoded cell");
-    check(
-        target.cell({17, 29}).material == source.cell({17, 29}).material &&
-            target.cell({17, 29}).variant == source.cell({17, 29}).variant,
-        "chunk cell changed during RLE replication");
+    check(applied && applied->changed_cells == meat2d::cells_per_chunk,
+          "chunk delta did not update every encoded cell");
+    check(target.cell({17, 29}).material == source.cell({17, 29}).material &&
+              target.cell({17, 29}).variant == source.cell({17, 29}).variant,
+          "chunk cell changed during RLE replication");
 
     auto corrupted = encoded.value_or(std::vector<std::uint8_t>{});
     if (!corrupted.empty()) {
         corrupted[0] = 0xFFU;
     }
-    check(
-        !meat2d::net::apply_chunk_delta(target, corrupted).has_value(),
-        "chunk delta with an invalid codec version was accepted");
+    check(!meat2d::net::apply_chunk_delta(target, corrupted).has_value(),
+          "chunk delta with an invalid codec version was accepted");
 
     const auto corner_interest = meat2d::net::interested_chunks(source, {0, 0}, 1);
     check(corner_interest.size() == 4, "corner interest was not clamped to world chunks");
-    const auto exact_interest =
-        meat2d::net::interested_chunks(source, {100, 100}, 0);
+    const auto exact_interest = meat2d::net::interested_chunks(source, {100, 100}, 0);
     check(exact_interest.size() == 1, "zero-radius interest included extra chunks");
 }
 
-std::optional<meat2d::net::Datagram> wait_for_datagram(
-    meat2d::net::UdpSocket& socket) {
+std::optional<meat2d::net::Datagram> wait_for_datagram(meat2d::net::UdpSocket& socket) {
     for (int attempt = 0; attempt < 200; ++attempt) {
         if (auto datagram = socket.receive()) {
             return datagram;
@@ -322,9 +281,9 @@ void test_udp_loopback() {
     check(sent, "UDP loopback send failed");
     const auto received = wait_for_datagram(server);
     check(received.has_value(), "UDP loopback server received no datagram");
-    check(
-        received && received->bytes == std::vector<std::uint8_t>(outbound.begin(), outbound.end()),
-        "UDP loopback payload was corrupted");
+    check(received &&
+              received->bytes == std::vector<std::uint8_t>(outbound.begin(), outbound.end()),
+          "UDP loopback payload was corrupted");
     if (!received) {
         return;
     }
@@ -333,9 +292,528 @@ void test_udp_loopback() {
     check(server.send(received->sender, reply), "UDP loopback reply failed");
     const auto returned = wait_for_datagram(client);
     check(returned.has_value(), "UDP loopback client received no reply");
-    check(
-        returned && returned->bytes == std::vector<std::uint8_t>(reply.begin(), reply.end()),
-        "UDP loopback reply was corrupted");
+    check(returned && returned->bytes == std::vector<std::uint8_t>(reply.begin(), reply.end()),
+          "UDP loopback reply was corrupted");
+}
+
+void test_discovery_codec() {
+    const meat2d::net::ServerInfo server{
+        .server_id = 0x1122334455667788ULL,
+        .endpoint =
+            {
+                .address = "203.0.113.42",
+                .port = 27182,
+            },
+        .name = "The Meat Locker",
+        .mode = "Falling Sand",
+        .map = "Volcanic Lab",
+        .build_id = 7,
+        .current_players = 3,
+        .maximum_clients = 8,
+        .password_protected = true,
+        .nat_punch_available = true,
+    };
+    check(meat2d::net::valid_server_info(server), "valid server listing metadata was rejected");
+
+    const auto announcement_payload = meat2d::net::encode_lan_announcement({
+        .request_id = 99,
+        .server = server,
+    });
+    check(announcement_payload.has_value(), "LAN announcement did not encode");
+    const auto announcement = announcement_payload
+                                  ? meat2d::net::decode_lan_announcement(*announcement_payload)
+                                  : std::nullopt;
+    check(announcement && announcement->server == server && announcement->request_id == 99,
+          "LAN announcement changed during serialization");
+
+    meat2d::net::DirectoryListResponseMessage page{
+        .request_id = 101,
+        .next_cursor = meat2d::net::directory_end_cursor,
+        .servers = {},
+    };
+    for (std::size_t index = 0; index < meat2d::net::maximum_directory_page_entries; ++index) {
+        auto entry = server;
+        entry.server_id += index;
+        page.servers.push_back(std::move(entry));
+    }
+    const auto page_payload = meat2d::net::encode_directory_list_response(page);
+    check(page_payload.has_value(), "full directory page did not encode");
+    const auto decoded_page =
+        page_payload ? meat2d::net::decode_directory_list_response(*page_payload) : std::nullopt;
+    check(decoded_page && decoded_page->servers == page.servers,
+          "directory page changed during serialization");
+
+    page.servers.push_back(server);
+    check(!meat2d::net::encode_directory_list_response(page).has_value(),
+          "oversized directory page was accepted");
+
+    auto truncated = announcement_payload.value_or(std::vector<std::uint8_t>{});
+    if (!truncated.empty()) {
+        truncated.pop_back();
+    }
+    check(!meat2d::net::decode_lan_announcement(truncated).has_value(),
+          "truncated LAN announcement was accepted");
+
+    auto invalid = server;
+    invalid.current_players = 9;
+    check(!meat2d::net::valid_server_info(invalid), "listing with too many players was accepted");
+}
+
+void test_lan_discovery() {
+    meat2d::net::LanServerAdvertiser advertiser;
+    check(advertiser.start(0), "LAN advertiser did not start");
+    if (!advertiser.running()) {
+        return;
+    }
+    const meat2d::net::ServerInfo expected{
+        .server_id = 5001,
+        .endpoint =
+            {
+                .address = "0.0.0.0",
+                .port = 31001,
+            },
+        .name = "LAN Test",
+        .mode = "Sandbox",
+        .map = "Test Lab",
+        .build_id = 1,
+        .current_players = 1,
+        .maximum_clients = 4,
+    };
+    meat2d::net::LanServerBrowser browser;
+    check(browser.refresh(advertiser.port(), 1), "LAN browser could not broadcast a query");
+    for (int update = 0; update < 200 && browser.servers().empty(); ++update) {
+        advertiser.update(expected);
+        browser.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(browser.servers().size() == 1, "LAN browser did not discover the local server");
+    if (!browser.servers().empty()) {
+        check(browser.servers().front().server_id == expected.server_id &&
+                  browser.servers().front().endpoint.port == expected.endpoint.port &&
+                  browser.servers().front().endpoint.address != "0.0.0.0" &&
+                  !browser.servers().front().endpoint.address.empty(),
+              "LAN browser reported the wrong join endpoint");
+    }
+}
+
+void test_public_directory_session() {
+    meat2d::net::PublicDirectoryServer directory({
+        .port = 0,
+        .maximum_servers = 32,
+        .maximum_datagrams_per_update = 256,
+        .lease_timeout = std::chrono::milliseconds(500),
+    });
+    check(directory.start(), "public directory did not start");
+    if (!directory.running()) {
+        return;
+    }
+
+    meat2d::net::AuthoritativeServer server({
+        .world =
+            {
+                .width = 128,
+                .height = 128,
+                .seed = 92,
+                .sleep_after_ticks = 30,
+            },
+        .port = 0,
+        .tick_rate = 60,
+        .maximum_clients = 4,
+        .interest_radius_chunks = 1,
+        .maximum_brush_radius = 8,
+        .maximum_inputs_per_update = 4,
+        .snapshot_interval_ticks = 1,
+        .chunk_interval_ticks = 1,
+        .client_timeout_updates = 100,
+        .session_name = "Public Session Test",
+        .mode_name = "Elements",
+        .map_name = "Directory Lab",
+        .build_id = 1,
+        .password_protected = false,
+        .advertise_lan = false,
+        .lan_discovery_port = meat2d::net::default_lan_discovery_port,
+        .advertise_public = true,
+        .public_directory =
+            meat2d::net::Endpoint{
+                .address = "127.0.0.1",
+                .port = directory.port(),
+            },
+        .directory_heartbeat_updates = 1,
+    });
+    check(server.start(), "public authoritative server did not start");
+    if (!server.running()) {
+        return;
+    }
+    server.update();
+    directory.update();
+    check(directory.server_count() == 1, "directory did not retain the server heartbeat");
+
+    meat2d::net::PublicServerBrowser browser;
+    check(browser.refresh(
+              {
+                  .address = "localhost",
+                  .port = directory.port(),
+              },
+              1),
+          "public browser could not request a server list");
+    for (int update = 0; update < 100 && !browser.complete(); ++update) {
+        directory.update();
+        browser.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(browser.complete(), "public server list did not complete");
+    check(browser.servers().size() == 1,
+          "public server list returned an unexpected number of servers");
+    if (!browser.servers().empty()) {
+        check(browser.servers().front().server_id == server.server_id() &&
+                  browser.servers().front().endpoint.port == server.port() &&
+                  browser.servers().front().endpoint.address == "127.0.0.1",
+              "directory did not report the observed public endpoint");
+    }
+
+    meat2d::net::AuthoritativeClient client;
+    check(client.connect_via_directory(
+              {
+                  .address = "127.0.0.1",
+                  .port = directory.port(),
+              },
+              server.server_id(), "Directory Client", 0xD1EC70U),
+          "directory-assisted client could not start");
+    for (int update = 0; update < 200 && !client.connected(); ++update) {
+        client.update();
+        directory.update();
+        server.update();
+        client.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(client.connected(), "directory-assisted NAT punch and handshake did not complete");
+    check(server.client_count() == 1, "directory-assisted join did not allocate one server slot");
+    client.disconnect();
+}
+
+void test_directory_pagination_identity_and_expiry() {
+    meat2d::net::PublicDirectoryServer directory({
+        .port = 0,
+        .maximum_servers = 32,
+        .maximum_datagrams_per_update = 256,
+        .lease_timeout = std::chrono::milliseconds(120),
+    });
+    meat2d::net::UdpSocket host_socket;
+    meat2d::net::UdpSocket attacker_socket;
+    check(directory.start(), "expiry-test directory did not start");
+    check(host_socket.open(), "directory test host socket did not open");
+    check(attacker_socket.open(), "directory test attacker socket did not open");
+    if (!directory.running() || !host_socket.valid() || !attacker_socket.valid()) {
+        return;
+    }
+    const meat2d::net::Endpoint directory_endpoint{
+        .address = "127.0.0.1",
+        .port = directory.port(),
+    };
+    const auto send_registration = [&](meat2d::net::UdpSocket& socket, std::uint64_t server_id,
+                                       std::uint64_t secret, std::string name) {
+        const auto payload = meat2d::net::encode_directory_registration({
+            .registration_secret = secret,
+            .server =
+                {
+                    .server_id = server_id,
+                    .endpoint =
+                        {
+                            .address = "0.0.0.0",
+                            .port = socket.local_port(),
+                        },
+                    .name = std::move(name),
+                    .mode = "Pagination",
+                    .map = "Directory Test",
+                    .build_id = 1,
+                    .current_players = 0,
+                    .maximum_clients = 8,
+                },
+        });
+        meat2d::net::PacketHeader header{};
+        header.type = meat2d::net::PacketType::DirectoryRegister;
+        const auto datagram = payload ? meat2d::net::encode_packet(header, *payload) : std::nullopt;
+        return datagram && socket.send(directory_endpoint, *datagram);
+    };
+
+    for (std::uint64_t index = 0; index < 8; ++index) {
+        check(send_registration(host_socket, 7'000U + index, 17'000U + index,
+                                "Page Server " + std::to_string(index)),
+              "directory pagination registration did not send");
+    }
+    directory.update();
+    check(directory.server_count() == 8, "directory did not retain all paginated registrations");
+
+    check(send_registration(attacker_socket, 7'000U, 999'999U, "Hijacked Name"),
+          "spoofed directory registration did not reach the directory");
+    const auto attack_stats = directory.update();
+    check(attack_stats.invalid_datagrams == 1,
+          "directory did not reject a server-ID registration secret mismatch");
+
+    meat2d::net::PublicServerBrowser browser;
+    check(browser.refresh(directory_endpoint, 1), "pagination browser could not start");
+    for (int update = 0; update < 100 && !browser.complete(); ++update) {
+        directory.update();
+        browser.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(browser.complete(), "paginated directory list did not finish");
+    check(browser.servers().size() == 8, "paginated directory list lost or duplicated servers");
+    const auto first = std::find_if(
+        browser.servers().begin(), browser.servers().end(),
+        [](const meat2d::net::ServerInfo& server) { return server.server_id == 7'000U; });
+    check(first != browser.servers().end() && first->name == "Page Server 0",
+          "spoofed registration replaced legitimate listing metadata");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(140));
+    const auto expiry_stats = directory.update();
+    check(expiry_stats.expired_servers == 8 && directory.server_count() == 0,
+          "stale public directory leases did not expire");
+}
+
+void test_public_browser_distrusts_directory_results() {
+    meat2d::net::UdpSocket fake_directory;
+    check(fake_directory.open(), "fake public directory socket did not open");
+    if (!fake_directory.valid()) {
+        return;
+    }
+
+    const auto directory_endpoint = meat2d::net::Endpoint{
+        .address = "127.0.0.1",
+        .port = fake_directory.local_port(),
+    };
+    meat2d::net::PublicServerBrowser browser;
+    check(browser.refresh(directory_endpoint, 7),
+          "public browser could not query the fake directory");
+    const auto request_datagram = wait_for_datagram(fake_directory);
+    const auto request_packet =
+        request_datagram ? meat2d::net::decode_packet(request_datagram->bytes) : std::nullopt;
+    const auto request = request_packet
+                             ? meat2d::net::decode_directory_list_request(request_packet->payload)
+                             : std::nullopt;
+    check(request.has_value(), "fake directory received no valid list request");
+    if (!request || !request_datagram) {
+        return;
+    }
+
+    const auto incompatible_payload = meat2d::net::encode_directory_list_response({
+        .request_id = request->request_id,
+        .next_cursor = meat2d::net::directory_end_cursor,
+        .servers =
+            {
+                {
+                    .server_id = 88,
+                    .endpoint =
+                        {
+                            .address = "127.0.0.1",
+                            .port = 27182,
+                        },
+                    .name = "Wrong Build",
+                    .mode = "Test",
+                    .map = "Test",
+                    .build_id = 8,
+                    .current_players = 0,
+                    .maximum_clients = 8,
+                },
+            },
+    });
+    meat2d::net::PacketHeader header{};
+    header.type = meat2d::net::PacketType::DirectoryListResponse;
+    const auto incompatible_datagram =
+        incompatible_payload ? meat2d::net::encode_packet(header, *incompatible_payload)
+                             : std::nullopt;
+    check(incompatible_datagram &&
+              fake_directory.send(request_datagram->sender, *incompatible_datagram),
+          "fake directory could not send an incompatible listing");
+    browser.update();
+    check(browser.complete() && browser.servers().empty(),
+          "public browser trusted an incompatible directory listing");
+
+    meat2d::net::PublicServerBrowser looping_browser;
+    check(looping_browser.refresh(directory_endpoint, 7),
+          "pagination-loop browser could not query the fake directory");
+    const auto looping_request_datagram = wait_for_datagram(fake_directory);
+    const auto looping_request_packet =
+        looping_request_datagram ? meat2d::net::decode_packet(looping_request_datagram->bytes)
+                                 : std::nullopt;
+    const auto looping_request =
+        looping_request_packet
+            ? meat2d::net::decode_directory_list_request(looping_request_packet->payload)
+            : std::nullopt;
+    if (!looping_request || !looping_request_datagram) {
+        check(false, "fake directory received no pagination-loop request");
+        return;
+    }
+    const auto looping_payload = meat2d::net::encode_directory_list_response({
+        .request_id = looping_request->request_id,
+        .next_cursor = 0,
+        .servers = {},
+    });
+    const auto looping_datagram =
+        looping_payload ? meat2d::net::encode_packet(header, *looping_payload) : std::nullopt;
+    check(looping_datagram &&
+              fake_directory.send(looping_request_datagram->sender, *looping_datagram),
+          "fake directory could not send a looping page");
+    looping_browser.update();
+    check(looping_browser.complete() && !looping_browser.last_error().empty(),
+          "public browser followed a non-advancing page cursor");
+}
+
+void test_project_browser_safety_and_editing() {
+    const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto test_parent = std::filesystem::temp_directory_path() / ("meat2d-browser-" + unique);
+    const auto project = test_parent / "project";
+    std::error_code error;
+    std::filesystem::create_directories(project / "src", error);
+    std::filesystem::create_directories(project / "build", error);
+    {
+        std::ofstream(project / "CMakeLists.txt") << "project(BrowserTest)\n";
+        std::ofstream(project / "src" / "main.cpp") << "int main() { return 0; }\n";
+        std::ofstream(project / "build" / "generated.cpp") << "generated\n";
+        std::ofstream(test_parent / "sample.png", std::ios::binary) << "fake image payload";
+    }
+
+    meat2d::tools::ProjectBrowser browser;
+    check(browser.open(project), "project browser could not open a valid project");
+    const auto generated_hidden =
+        std::none_of(browser.entries().begin(), browser.entries().end(),
+                     [](const meat2d::tools::ProjectEntry& entry) {
+                         return entry.relative_path.generic_string().starts_with("build/");
+                     });
+    check(generated_hidden, "project browser exposed generated build files by default");
+
+    auto loaded = browser.load_text("src/main.cpp");
+    check(loaded.success, "project browser could not load source text");
+    check(loaded.text.find("int main() { return 0; }") != std::string::npos,
+          "project browser changed loaded source text");
+    const auto saved = browser.save_text("src/main.cpp", "int main() { return 7; }\n");
+    check(saved.success, "project browser could not save source text");
+    loaded = browser.load_text("src/main.cpp");
+    check(loaded.success && loaded.text == "int main() { return 7; }\n",
+          "project browser did not persist the edited source");
+
+    const auto created = browser.create_text_file("config/settings.toml", "[game]\nname='test'\n");
+    check(created.success, "project browser could not create a config file");
+    const auto imported = browser.import_asset(test_parent / "sample.png", "textures");
+    check(imported.success, "project browser could not import an asset");
+    check(imported.success && imported.path.parent_path().filename() == "textures" &&
+              std::filesystem::is_regular_file(imported.path),
+          "asset import escaped or missed the requested project folder");
+
+    check(!browser.load_text("../outside.txt").success,
+          "project browser allowed parent-directory traversal");
+    check(!browser.create_text_file("../escape.cpp", {}).success,
+          "project browser created a file outside the project");
+    check(!browser.resolve_for_external_open(test_parent / "sample.png").success,
+          "external-open resolver accepted an absolute path");
+
+    browser.set_show_generated(true);
+    check(browser.refresh(), "project browser could not rescan generated files");
+    check(std::any_of(browser.entries().begin(), browser.entries().end(),
+                      [](const meat2d::tools::ProjectEntry& entry) {
+                          return entry.relative_path.generic_string() == "build/generated.cpp";
+                      }),
+          "generated-file opt-in did not expose the build tree");
+
+    browser.close();
+    std::filesystem::remove_all(test_parent, error);
+    check(!error, "project browser test files could not be cleaned up");
+}
+
+void test_project_manager_validation_and_templates() {
+    const auto templates = meat2d::tools::locate_template_root();
+    check(!templates.empty(), "project manager could not locate its templates");
+    if (templates.empty()) {
+        return;
+    }
+    meat2d::tools::ProjectManager manager(templates);
+    const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto test_parent =
+        std::filesystem::temp_directory_path() / ("meat2d-project-manager-" + unique);
+
+    const auto invalid = manager.create_project({
+        .name = "Bad \" CMake ${Name}",
+        .directory = test_parent / "invalid",
+        .project_template = meat2d::tools::ProjectTemplate::SideScroller,
+        .engine_git_tag = "main",
+    });
+    check(!invalid.success && !std::filesystem::exists(test_parent / "invalid"),
+          "project manager accepted an injectable project name");
+
+    const auto valid = manager.create_project({
+        .name = "Meat & Potatoes (Test)",
+        .directory = test_parent / "valid",
+        .project_template = meat2d::tools::ProjectTemplate::TopDown,
+        .engine_git_tag = "main",
+    });
+    check(valid.success, "project manager could not create a valid starter");
+    check(std::filesystem::is_regular_file(test_parent / "valid" / "src" / "main.cpp") &&
+              std::filesystem::is_regular_file(test_parent / "valid" / "CMakePresets.json") &&
+              std::filesystem::is_regular_file(test_parent / "valid" / ".github" / "workflows" /
+                                               "build.yml"),
+          "generated starter omitted code, presets, or publishing workflow");
+
+    std::error_code error;
+    std::filesystem::remove_all(test_parent, error);
+    check(!error, "project manager test files could not be cleaned up");
+}
+
+void test_sprite_sheet_metadata() {
+    const meat2d::assets::SpriteSheet sheet{
+        .image = "assets/sprites/player.png",
+        .frame_width = 16,
+        .frame_height = 16,
+        .margin = 1,
+        .spacing = 2,
+        .animations =
+            {
+                {
+                    .name = "idle",
+                    .first_frame = 0,
+                    .frame_count = 2,
+                    .frames_per_second = 6,
+                    .loop = true,
+                },
+                {
+                    .name = "run",
+                    .first_frame = 2,
+                    .frame_count = 4,
+                    .frames_per_second = 12,
+                    .loop = true,
+                },
+            },
+    };
+    check(meat2d::assets::valid_sprite_sheet(sheet, 70, 36),
+          "valid sprite sheet metadata was rejected");
+    check(meat2d::assets::sprite_frame_count(sheet, 70, 36) == 6,
+          "sprite grid frame count is incorrect");
+    const auto frame = meat2d::assets::sprite_frame(sheet, 70, 36, 5);
+    check(frame && frame->x == 37 && frame->y == 19 && frame->width == 16 && frame->height == 16,
+          "sprite frame rectangle is incorrect");
+    check(!meat2d::assets::sprite_frame(sheet, 70, 36, 6).has_value(),
+          "out-of-range sprite frame was returned");
+
+    const auto encoded = meat2d::assets::encode_sprite_sheet_toml(sheet);
+    check(!encoded.empty(), "sprite sheet metadata did not encode");
+    const auto decoded = meat2d::assets::decode_sprite_sheet_toml(encoded);
+    check(decoded.sheet && *decoded.sheet == sheet,
+          "sprite sheet metadata changed during TOML round trip");
+
+    const auto unsafe = meat2d::assets::decode_sprite_sheet_toml("version = 1\n"
+                                                                 "image = \"../outside.png\"\n"
+                                                                 "frame_width = 16\n"
+                                                                 "frame_height = 16\n");
+    check(!unsafe.sheet.has_value(), "sprite metadata accepted a path outside the project");
+    const auto malformed = meat2d::assets::decode_sprite_sheet_toml("version = 1\nunknown = 3\n");
+    check(!malformed.sheet.has_value() && malformed.error_line == 2,
+          "malformed sprite metadata did not report its source line");
+    const auto hash_in_path = meat2d::assets::decode_sprite_sheet_toml(
+        "version = 1\n"
+        "image = \"assets/player#alternate.png\" # inline comment\n"
+        "frame_width = 16\n"
+        "frame_height = 16\n");
+    check(hash_in_path.sheet && hash_in_path.sheet->image == "assets/player#alternate.png",
+          "sprite metadata treated a hash inside a string as a comment");
 }
 
 void test_authoritative_client_server_session() {
@@ -362,15 +840,13 @@ void test_authoritative_client_server_session() {
     }
 
     meat2d::net::AuthoritativeClient client;
-    check(
-        client.connect(
-            {
-                .address = "localhost",
-                .port = server.port(),
-            },
-            "Session Test",
-            0xC0FFEEU),
-        "authoritative client failed to start connecting");
+    check(client.connect(
+              {
+                  .address = "localhost",
+                  .port = server.port(),
+              },
+              "Session Test", 0xC0FFEEU),
+          "authoritative client failed to start connecting");
 
     for (int update = 0; update < 80 && !client.connected(); ++update) {
         client.update();
@@ -386,9 +862,8 @@ void test_authoritative_client_server_session() {
         return;
     }
 
-    check(
-        client.paint({10, 10}, meat2d::MaterialId::Stone, 2),
-        "connected client could not send a paint input");
+    check(client.paint({10, 10}, meat2d::MaterialId::Stone, 2),
+          "connected client could not send a paint input");
     bool server_applied = false;
     bool client_replicated = false;
     for (int update = 0; update < 120; ++update) {
@@ -396,12 +871,10 @@ void test_authoritative_client_server_session() {
         server.update();
         client.update();
         server_applied =
-            server.simulation().world().material({10, 10}) ==
-            meat2d::MaterialId::Stone;
+            server.simulation().world().material({10, 10}) == meat2d::MaterialId::Stone;
         const auto* mirror = client.replicated_world();
         client_replicated =
-            mirror != nullptr &&
-            mirror->material({10, 10}) == meat2d::MaterialId::Stone;
+            mirror != nullptr && mirror->material({10, 10}) == meat2d::MaterialId::Stone;
         if (server_applied && client_replicated && client.latest_snapshot()) {
             break;
         }
@@ -416,9 +889,7 @@ void test_authoritative_client_server_session() {
         server.update();
         client.update();
     }
-    check(
-        server.client_count() == 1,
-        "active client timed out despite periodic keepalives");
+    check(server.client_count() == 1, "active client timed out despite periodic keepalives");
 
     client.disconnect();
     for (int update = 0; update < 10 && server.client_count() != 0; ++update) {
@@ -439,15 +910,12 @@ void test_organism_genome_and_ecology() {
         .mutation = 7,
         .pigment = 5,
     };
-    const auto decoded =
-        meat2d::life::decode_traits(meat2d::life::encode_traits(expected));
+    const auto decoded = meat2d::life::decode_traits(meat2d::life::encode_traits(expected));
     check(decoded.photosynthesis == expected.photosynthesis, "photosynthesis gene changed");
     check(decoded.digestion == expected.digestion, "digestion gene changed");
     check(decoded.motility == expected.motility, "motility gene changed");
     check(decoded.reproduction == expected.reproduction, "reproduction gene changed");
-    check(
-        decoded.heat_preference == expected.heat_preference,
-        "heat-preference gene changed");
+    check(decoded.heat_preference == expected.heat_preference, "heat-preference gene changed");
     check(decoded.resilience == expected.resilience, "resilience gene changed");
     check(decoded.mutation == expected.mutation, "mutation gene changed");
     check(decoded.pigment == expected.pigment, "pigment gene changed");
@@ -459,16 +927,13 @@ void test_organism_genome_and_ecology() {
         .sleep_after_ticks = 30,
     });
     simulation.world().set_material({12, 12}, meat2d::MaterialId::Plant);
-    const bool seeded = simulation.organisms().seed(
-        {12, 12},
-        meat2d::life::decomposer_genome,
-        1'500);
+    const bool seeded =
+        simulation.organisms().seed({12, 12}, meat2d::life::decomposer_genome, 1'500);
     check(seeded, "cellular organism failed to seed");
     const auto stats = simulation.step();
     check(stats.organisms.consumed_cells == 1, "decomposer did not consume plant matter");
-    check(
-        simulation.world().material({12, 12}) == meat2d::MaterialId::Empty,
-        "consumed plant matter remained in the material field");
+    check(simulation.world().material({12, 12}) == meat2d::MaterialId::Empty,
+          "consumed plant matter remained in the material field");
 }
 
 void test_organism_determinism_and_reproduction() {
@@ -514,12 +979,10 @@ void test_sand_falls_and_stone_stays() {
         world.step();
     }
 
-    check(
-        world.material({32, 59}) == meat2d::MaterialId::Sand,
-        "sand did not settle immediately above stone");
-    check(
-        world.material({32, 60}) == meat2d::MaterialId::Stone,
-        "stone moved during cellular simulation");
+    check(world.material({32, 59}) == meat2d::MaterialId::Sand,
+          "sand did not settle immediately above stone");
+    check(world.material({32, 60}) == meat2d::MaterialId::Stone,
+          "stone moved during cellular simulation");
 }
 
 void test_water_conserves_cells() {
@@ -571,9 +1034,8 @@ void test_temperature_phase_changes() {
 
     const auto stats = world.step();
     check(world.material({4, 4}) == meat2d::MaterialId::Ice, "cold water did not freeze");
-    check(
-        world.material({11, 11}) == meat2d::MaterialId::Steam,
-        "boiling water did not become steam");
+    check(world.material({11, 11}) == meat2d::MaterialId::Steam,
+          "boiling water did not become steam");
     check(stats.reacted_cells == 2, "phase-change reaction count is incorrect");
 }
 
@@ -588,9 +1050,8 @@ void test_lava_water_reaction() {
     world.set_material({8, 8}, meat2d::MaterialId::Water);
 
     world.step();
-    check(
-        world.material({7, 8}) == meat2d::MaterialId::Obsidian,
-        "lava did not cool into obsidian beside water");
+    check(world.material({7, 8}) == meat2d::MaterialId::Obsidian,
+          "lava did not cool into obsidian beside water");
     std::size_t steam_cells = 0;
     for (int y = 0; y < world.height(); ++y) {
         for (int x = 0; x < world.width(); ++x) {
@@ -613,9 +1074,8 @@ void test_chemical_and_electrical_reactions() {
         world.set_material({7, 7}, meat2d::MaterialId::Acid);
         world.set_material({8, 7}, meat2d::MaterialId::Stone);
         world.step();
-        check(
-            world.material({8, 7}) == meat2d::MaterialId::Empty,
-            "acid did not corrode adjacent stone");
+        check(world.material({8, 7}) == meat2d::MaterialId::Empty,
+              "acid did not corrode adjacent stone");
     }
 
     {
@@ -628,9 +1088,8 @@ void test_chemical_and_electrical_reactions() {
         world.set_material({7, 7}, meat2d::MaterialId::Metal);
         world.set_material({8, 7}, meat2d::MaterialId::Electricity);
         world.step();
-        check(
-            world.material({8, 7}) == meat2d::MaterialId::Empty,
-            "electricity cell was not consumed");
+        check(world.material({8, 7}) == meat2d::MaterialId::Empty,
+              "electricity cell was not consumed");
         check(world.cell({7, 7}).state > 0U, "electricity did not charge adjacent metal");
     }
 
@@ -647,12 +1106,10 @@ void test_chemical_and_electrical_reactions() {
         world.set_cell({10, 10}, hot_powder);
         world.set_material({11, 10}, meat2d::MaterialId::Wood);
         const auto stats = world.step();
-        check(
-            world.material({10, 10}) == meat2d::MaterialId::Fire,
-            "hot gunpowder did not explode");
-        check(
-            world.material({11, 10}) == meat2d::MaterialId::Fire,
-            "explosion did not ignite nearby wood");
+        check(world.material({10, 10}) == meat2d::MaterialId::Fire,
+              "hot gunpowder did not explode");
+        check(world.material({11, 10}) == meat2d::MaterialId::Fire,
+              "explosion did not ignite nearby wood");
         check(stats.reacted_cells >= 2, "explosion did not report its reactions");
     }
 }
@@ -709,15 +1166,13 @@ void test_tick_ordered_entity_commands() {
         .material = meat2d::MaterialId::Concrete,
     });
     check(queued, "valid future world command was rejected");
-    check(
-        simulation.state_hash() == reversed.state_hash(),
-        "command enqueue order changed authoritative state");
+    check(simulation.state_hash() == reversed.state_hash(),
+          "command enqueue order changed authoritative state");
     const auto stats = simulation.step();
     reversed.step();
     check(stats.applied_commands == 2, "queued world commands were not applied");
-    check(
-        simulation.world().material({4, 5}) == meat2d::MaterialId::Concrete,
-        "tick-ordered paint command changed the wrong cell");
+    check(simulation.world().material({4, 5}) == meat2d::MaterialId::Concrete,
+          "tick-ordered paint command changed the wrong cell");
 }
 
 void test_grazer_predator_and_worker_ai() {
@@ -730,17 +1185,14 @@ void test_grazer_predator_and_worker_ai() {
         });
         add_floor(simulation, 10);
         simulation.world().set_material({6, 9}, meat2d::MaterialId::Plant);
-        const auto grazer =
-            simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {5, 9});
+        const auto grazer = simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {5, 9});
         simulation.step();
         check(grazer != 0, "grazer failed to spawn");
-        check(
-            simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
-            "grazer did not consume adjacent plant life");
-        check(
-            simulation.find_agent(grazer) != nullptr &&
-                simulation.find_agent(grazer)->action == meat2d::ai::AgentAction::Eat,
-            "grazer did not report its eat action");
+        check(simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
+              "grazer did not consume adjacent plant life");
+        check(simulation.find_agent(grazer) != nullptr &&
+                  simulation.find_agent(grazer)->action == meat2d::ai::AgentAction::Eat,
+              "grazer did not report its eat action");
     }
 
     {
@@ -752,13 +1204,11 @@ void test_grazer_predator_and_worker_ai() {
         });
         add_floor(simulation, 10);
         simulation.spawn_agent(meat2d::ai::AgentKind::Predator, {5, 9});
-        const auto grazer =
-            simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {6, 9});
+        const auto grazer = simulation.spawn_agent(meat2d::ai::AgentKind::Grazer, {6, 9});
         simulation.step();
-        check(
-            simulation.find_agent(grazer) != nullptr &&
-                simulation.find_agent(grazer)->health == 75U,
-            "predator did not damage adjacent prey");
+        check(simulation.find_agent(grazer) != nullptr &&
+                  simulation.find_agent(grazer)->health == 75U,
+              "predator did not damage adjacent prey");
     }
 
     {
@@ -770,16 +1220,13 @@ void test_grazer_predator_and_worker_ai() {
         });
         add_floor(simulation, 10);
         simulation.world().set_material({6, 9}, meat2d::MaterialId::Debris);
-        const auto worker =
-            simulation.spawn_agent(meat2d::ai::AgentKind::Worker, {5, 9});
+        const auto worker = simulation.spawn_agent(meat2d::ai::AgentKind::Worker, {5, 9});
         simulation.step();
-        check(
-            simulation.find_agent(worker) != nullptr &&
-                simulation.find_agent(worker)->carried == meat2d::MaterialId::Debris,
-            "worker did not collect adjacent debris");
-        check(
-            simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
-            "worker did not remove collected debris");
+        check(simulation.find_agent(worker) != nullptr &&
+                  simulation.find_agent(worker)->carried == meat2d::MaterialId::Debris,
+              "worker did not collect adjacent debris");
+        check(simulation.world().material({6, 9}) == meat2d::MaterialId::Empty,
+              "worker did not remove collected debris");
 
         simulation.queue_command({
             .target_tick = 2,
@@ -790,9 +1237,8 @@ void test_grazer_predator_and_worker_ai() {
             .material = meat2d::MaterialId::Debris,
         });
         simulation.step();
-        check(
-            simulation.world().material({4, 9}) == meat2d::MaterialId::Debris,
-            "worker did not place its carried material");
+        check(simulation.world().material({4, 9}) == meat2d::MaterialId::Debris,
+              "worker did not place its carried material");
     }
 }
 
@@ -832,9 +1278,7 @@ void test_living_simulation_determinism() {
     for (int tick = 0; tick < 240; ++tick) {
         first.step();
         second.step();
-        check(
-            first.state_hash() == second.state_hash(),
-            "equal living simulations diverged");
+        check(first.state_hash() == second.state_hash(), "equal living simulations diverged");
         if (failures != 0) {
             return;
         }
@@ -852,9 +1296,8 @@ void test_cross_chunk_motion() {
     for (int tick = 0; tick < 4; ++tick) {
         world.step();
     }
-    check(
-        world.material({70, 66}) == meat2d::MaterialId::Sand,
-        "sand failed to cross a chunk boundary");
+    check(world.material({70, 66}) == meat2d::MaterialId::Sand,
+          "sand failed to cross a chunk boundary");
 }
 
 void test_determinism() {
@@ -923,6 +1366,14 @@ int main() {
         test_reliable_sequence_window();
         test_chunk_delta_fragmentation();
         test_udp_loopback();
+        test_discovery_codec();
+        test_lan_discovery();
+        test_public_directory_session();
+        test_directory_pagination_identity_and_expiry();
+        test_public_browser_distrusts_directory_results();
+        test_project_browser_safety_and_editing();
+        test_project_manager_validation_and_templates();
+        test_sprite_sheet_metadata();
         test_authoritative_client_server_session();
         test_organism_genome_and_ecology();
         test_organism_determinism_and_reproduction();

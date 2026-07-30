@@ -31,17 +31,22 @@
 - [x] Input commands and server tick loop
 - [x] Chunk interest management
 - [x] Snapshot and chunk-delta serialization
+- [x] Direct joins, LAN discovery, and public server listings
+- [x] Self-hostable directory and UDP hole-punch introductions
 - [ ] Prediction, reconciliation, and state-hash diagnostics
 - [x] Loss, retransmission, duplicate, wraparound, and loopback tests
 
 ## 0.4 — game creation and packaging
 
 - [ ] Public client/rendering library target
-- [ ] `meat2d new` starter-game scaffolder
-- [ ] Side-view and top-down starter templates
-- [ ] Asset and settings manifests
-- [ ] Windows/Linux client and headless-server bundles
-- [ ] Reusable GitHub Actions build/release workflow
+- [x] `meat2d new` starter-game scaffolder
+- [x] Side-view and top-down starter templates
+- [x] Asset and settings manifests
+- [x] Graphical project editor with a root-confined code/asset browser
+- [x] PNG/JPEG preview and sprite-sheet animation manager
+- [x] One-click background build, game test, package, and GitHub publish
+- [x] Windows/Linux client and headless-server bundle definitions
+- [x] Reusable GitHub Actions build/release workflow
 - [ ] Tagged SDK archives and example game
 
 ## Later
@@ -52,3 +57,4 @@
 - Destructible terrain queries
 - Scripting/mod extension boundary
 - Profiling overlay and replay inspector
+- Authenticated relay fallback for restrictive NAT

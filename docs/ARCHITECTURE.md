@@ -100,6 +100,8 @@ The networking baseline supports two to eight players:
 - Reliable control messages over an unreliable packet transport
 - Periodic snapshots with chunk revision deltas
 - State-hash diagnostics and a replicated client material world
+- LAN discovery and direct local/IP joins
+- Expiring public listings and directory-assisted UDP hole punching
 
 Wire values are explicitly little-endian encoded; native struct memory is never
 sent. Packets stay at or below 1,200 bytes. Large RLE chunk messages are split
@@ -112,7 +114,9 @@ fit a narrow future-tick window, pass a per-update rate budget, and satisfy
 world/material limits before entering the simulation command buffer.
 
 Movement prediction, reconciliation, encryption, identity authentication, and
-NAT traversal remain later layers. See [NETWORKING.md](NETWORKING.md).
+a relay fallback remain later layers. Direct, LAN, and public-directory hosting
+are described in [DISCOVERY_AND_HOSTING.md](DISCOVERY_AND_HOSTING.md). See
+[NETWORKING.md](NETWORKING.md) for the gameplay wire protocol.
 
 ## AI direction
 
@@ -146,13 +150,15 @@ sprite/entity passes without changing the cell-state API.
 
 ## Packaging
 
-The `meat2d_core` and `meat2d_net` libraries export as `Meat2D::Core` and
-`Meat2D::Net`. They support:
+The `meat2d_core`, `meat2d_net`, and `meat2d_tools` libraries export as
+`Meat2D::Core`, `Meat2D::Net`, and `Meat2D::Tools`. They support:
 
 - Direct `add_subdirectory`
 - CMake `FetchContent`
 - Installation plus `find_package(Meat2D CONFIG REQUIRED)`
 - CPack ZIP/TGZ SDK archives
 
-Planned tooling adds a starter-game generator, asset conventions, client/server
-release bundles, and reusable GitHub publishing workflows.
+The CLI and graphical editor build on `Meat2D::Tools` for starter generation,
+project-root-confined code/asset access, background build/test/package tasks,
+and explicit GitHub publishing. Sprite metadata remains plain TOML and its
+validated runtime parser lives in `Meat2D::Core`.

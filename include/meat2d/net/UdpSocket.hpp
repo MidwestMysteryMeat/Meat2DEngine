@@ -24,9 +24,7 @@ struct Datagram {
     std::vector<std::uint8_t> bytes;
 };
 
-[[nodiscard]] std::optional<Endpoint> resolve_endpoint(
-    std::string_view host,
-    std::uint16_t port);
+[[nodiscard]] std::optional<Endpoint> resolve_endpoint(std::string_view host, std::uint16_t port);
 
 class UdpSocket {
   public:
@@ -37,12 +35,11 @@ class UdpSocket {
     UdpSocket(const UdpSocket&) = delete;
     UdpSocket& operator=(const UdpSocket&) = delete;
 
-    bool open(
-        std::uint16_t port = 0,
-        std::string_view bind_address = "0.0.0.0");
+    bool open(std::uint16_t port = 0, std::string_view bind_address = "0.0.0.0");
     void close() noexcept;
     [[nodiscard]] bool valid() const noexcept;
     [[nodiscard]] std::uint16_t local_port() const noexcept;
+    bool enable_broadcast(bool enabled = true);
 
     bool send(const Endpoint& endpoint, std::span<const std::uint8_t> bytes);
     [[nodiscard]] std::optional<Datagram> receive();

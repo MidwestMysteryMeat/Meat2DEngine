@@ -4,9 +4,9 @@ Meat2D is a small, simulation-first C++20 engine for destructible 2D worlds.
 Its target space sits between falling-sand games, Terraria-like sandboxes,
 Worms-like terrain destruction, and multiplayer side-view or top-down shooters.
 
-The project is intentionally early. The first working slice is a deterministic
-side-view living laboratory with an authoritative multiplayer server. Game
-templates and one-command packaging are being built on the same state.
+The project is intentionally early. Its first working slice combines a
+deterministic living laboratory, authoritative multiplayer, a graphical
+project editor, starter games, and one-command packaging.
 
 ## Current capabilities
 
@@ -34,8 +34,15 @@ templates and one-command packaging are being built on the same state.
   retransmission, duplicate suppression, and keepalives
 - Per-client chunk interest, RLE cell deltas, MTU-safe fragmentation,
   snapshots, and a replicated client world
-- Installable `Meat2D::Core` and `Meat2D::Net` CMake targets and CPack SDK
-  archives
+- Same-machine/direct joins, automatic LAN discovery, public server listings,
+  and directory-assisted UDP hole punching
+- Self-hostable `meat2d_directory` service; gameplay remains peer-to-server
+- Installable `Meat2D::Core`, `Meat2D::Net`, and `Meat2D::Tools` CMake
+  targets and CPack SDK archives
+- Graphical project editor with guarded code/config editing, native asset
+  import, PNG/JPEG preview, sprite-sheet grids, and animation metadata
+- Side-view/top-down starters plus background build, test, package, and
+  GitHub publishing actions
 
 ## Build
 
@@ -64,6 +71,7 @@ Run:
 
 ```bash
 ./build/dev/meat2d_sandbox
+./build/dev/meat2d_launcher
 ./build/headless/meat2d_server --ticks 600
 ./build/headless/meat2d_benchmark
 ```
@@ -89,6 +97,25 @@ Or use the headless connection/replication smoke client:
 
 ```bash
 ./build/headless/meat2d_remote --host localhost --port 27182
+```
+
+List LAN sessions:
+
+```bash
+./build/headless/meat2d_remote --list-lan
+```
+
+For public listings, deploy `meat2d_directory`, point the dedicated server at
+it with `--public-directory`, then browse with `--list-public`. The directory
+introduces peers but never relays gameplay. See
+[Discovery and player-hosted sessions](docs/DISCOVERY_AND_HOSTING.md) for
+commands, port/firewall setup, and NAT limitations.
+
+The graphical sandbox can join a selected public listing by ID:
+
+```bash
+./build/dev/meat2d_sandbox --server-id 123456789 \
+  --directory directory.example.com --directory-port 27184 --name Player1
 ```
 
 In connected graphical clients, left/right painting is sent as validated,
@@ -131,8 +158,11 @@ During engine development, `FetchContent` is the shortest integration path:
 include(FetchContent)
 
 set(MEAT2D_BUILD_CLIENT OFF CACHE BOOL "" FORCE)
+set(MEAT2D_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_REMOTE_CLIENT OFF CACHE BOOL "" FORCE)
+set(MEAT2D_BUILD_DIRECTORY OFF CACHE BOOL "" FORCE)
+set(MEAT2D_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MEAT2D_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
@@ -175,20 +205,25 @@ because deterministic replay is available.
 
 ```text
 apps/
+  cli/           project creation/build/package/publish command
+  launcher/      graphical editor, code/asset browser, and sprite manager
   sandbox/       SDL3 interactive living laboratory
   server/        headless benchmark and authoritative server
   remote/        headless multiplayer smoke client
+  directory/     self-hostable public listing and NAT introduction service
 benchmarks/      simulation throughput checks
 cmake/           installed-package configuration
 docs/            architecture and roadmap
 include/meat2d/  public engine API
 src/             engine implementation
+templates/       side-view and top-down game starters
 tests/           unit and determinism tests
 ```
 
 See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
 [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
-[Roadmap](docs/ROADMAP.md).
+[Roadmap](docs/ROADMAP.md). See [Project editor](docs/EDITOR.md) for the
+code/asset browser, sprite workflow, and one-click test/package tools.
 
 ## License
 

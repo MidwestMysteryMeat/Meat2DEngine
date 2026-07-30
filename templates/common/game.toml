@@ -1,0 +1,19 @@
+[game]
+name = "{{PROJECT_NAME}}"
+slug = "{{PROJECT_SLUG}}"
+version = "0.1.0"
+engine_tag = "{{ENGINE_GIT_TAG}}"
+
+[simulation]
+tick_rate = 60
+world_width = 320
+world_height = 180
+
+[multiplayer]
+enabled = true
+default_port = 27182
+maximum_players = 8
+lan_discovery = true
+lan_discovery_port = 27183
+public_directory = ""
+public_directory_port = 27184
