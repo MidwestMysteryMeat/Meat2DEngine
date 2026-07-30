@@ -17,6 +17,12 @@ struct WorldConfig {
     std::uint16_t sleep_after_ticks{30};
 };
 
+struct RaycastHit {
+    Vec2i position{};
+    MaterialId material{MaterialId::Empty};
+    bool blocked{};
+};
+
 struct TickStats {
     Tick tick{};
     std::uint64_t moved_cells{};
@@ -42,6 +48,16 @@ class World {
     bool set_cell(Vec2i position, Cell value);
     bool set_material(Vec2i position, MaterialId material);
     std::size_t paint_disc(Vec2i center, std::int32_t radius, MaterialId material);
+
+    // Walks an integer Bresenham line from `origin` to `target`, stopping at
+    // the first intervening cell that blocks line of sight (see
+    // blocks_line_of_sight). `origin` and `target` themselves never count as
+    // blockers, so aiming a ray directly at a wall reports it unblocked at
+    // that wall. Deterministic: no floating-point state, matches on any
+    // platform for equal inputs. Returns target/blocked=false unchanged if
+    // either endpoint is out of bounds.
+    [[nodiscard]] RaycastHit raycast(Vec2i origin, Vec2i target) const noexcept;
+    [[nodiscard]] bool line_of_sight(Vec2i origin, Vec2i target) const noexcept;
 
     TickStats step();
     void wake_all() noexcept;

@@ -1515,6 +1515,44 @@ void test_raster_output() {
     check(pixels[offset + 3U] == 255, "raster alpha is not opaque");
 }
 
+void test_raycast_and_line_of_sight() {
+    meat2d::World world({
+        .width = 32,
+        .height = 32,
+        .seed = 77,
+        .sleep_after_ticks = 30,
+    });
+
+    const auto clear = world.raycast({1, 5}, {30, 5});
+    check(!clear.blocked, "raycast over open space reported a block");
+    check(clear.position == meat2d::Vec2i{30, 5}, "unblocked raycast did not report the target");
+    check(world.line_of_sight({1, 5}, {30, 5}), "line_of_sight disagreed with an unblocked raycast");
+
+    for (int y = 0; y < world.height(); ++y) {
+        world.set_material({15, y}, meat2d::MaterialId::Stone);
+    }
+    const auto blocked = world.raycast({1, 5}, {30, 5});
+    check(blocked.blocked, "raycast passed through a solid wall");
+    check(blocked.position == meat2d::Vec2i{15, 5}, "raycast did not stop at the wall face");
+    check(blocked.material == meat2d::MaterialId::Stone, "raycast reported the wrong blocking material");
+    check(!world.line_of_sight({1, 5}, {30, 5}), "line_of_sight disagreed with a blocked raycast");
+
+    world.set_material({15, 5}, meat2d::MaterialId::Empty);
+    const auto reopened = world.raycast({1, 5}, {30, 5});
+    check(!reopened.blocked, "destroying the wall did not reopen the raycast");
+    check(world.line_of_sight({1, 5}, {30, 5}),
+          "line_of_sight did not recover after the wall was destroyed");
+
+    const auto aimed_at_wall = world.raycast({1, 6}, {15, 6});
+    check(!aimed_at_wall.blocked, "aiming directly at a wall should not itself count as blocked");
+    check(aimed_at_wall.position == meat2d::Vec2i{15, 6}, "raycast at a wall must report the wall cell");
+    check(aimed_at_wall.material == meat2d::MaterialId::Stone,
+          "raycast did not report the aimed-at wall's material");
+
+    const auto out_of_bounds = world.raycast({-5, 5}, {10, 5});
+    check(!out_of_bounds.blocked, "out-of-bounds origin should return a safe default, not a block");
+}
+
 } // namespace
 
 int main() {
@@ -1550,6 +1588,7 @@ int main() {
         test_chunks_sleep();
         test_dirty_region_rasterization();
         test_raster_output();
+        test_raycast_and_line_of_sight();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';
         return 1;

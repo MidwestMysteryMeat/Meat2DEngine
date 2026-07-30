@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <limits>
 #include <stdexcept>
 
@@ -167,6 +168,51 @@ std::size_t World::paint_disc(Vec2i center, std::int32_t radius, MaterialId mate
         }
     }
     return changed;
+}
+
+RaycastHit World::raycast(Vec2i origin, Vec2i target) const noexcept {
+    RaycastHit hit{target, MaterialId::Empty, false};
+    if (!in_bounds(origin) || !in_bounds(target)) {
+        return hit;
+    }
+
+    auto x = origin.x;
+    auto y = origin.y;
+    const auto delta_x = std::abs(target.x - origin.x);
+    const auto delta_y = -std::abs(target.y - origin.y);
+    const auto step_x = origin.x < target.x ? 1 : -1;
+    const auto step_y = origin.y < target.y ? 1 : -1;
+    auto error = delta_x + delta_y;
+
+    while (true) {
+        const bool at_origin = x == origin.x && y == origin.y;
+        const bool at_target = x == target.x && y == target.y;
+        if (!at_origin && !at_target) {
+            const auto found = material({x, y});
+            if (blocks_line_of_sight(found)) {
+                return {{x, y}, found, true};
+            }
+        }
+        if (at_target) {
+            break;
+        }
+        const auto doubled_error = 2 * error;
+        if (doubled_error >= delta_y) {
+            error += delta_y;
+            x += step_x;
+        }
+        if (doubled_error <= delta_x) {
+            error += delta_x;
+            y += step_y;
+        }
+    }
+
+    hit.material = material(target);
+    return hit;
+}
+
+bool World::line_of_sight(Vec2i origin, Vec2i target) const noexcept {
+    return !raycast(origin, target).blocked;
 }
 
 TickStats World::step() {

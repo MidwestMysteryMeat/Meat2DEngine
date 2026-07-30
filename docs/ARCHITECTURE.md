@@ -78,6 +78,19 @@ gravity, gases rise, and density controls displacement. Reactions use only
 integer and fixed-point state. See [MATERIALS.md](MATERIALS.md) for the current
 catalog and interaction rules.
 
+### Terrain queries
+
+`World::raycast(origin, target)` walks an integer Bresenham line and stops at
+the first cell whose material `blocks_line_of_sight` (any granular, liquid, or
+static-solid phase), returning that cell's position and material. Neither
+endpoint counts as a blocker, so aiming directly at a wall reports the wall
+face rather than a self-block. `World::line_of_sight(origin, target)` is the
+boolean form. Both are pure integer math — no floats — so they hold the same
+determinism contract as the rest of the simulation, and both immediately
+reflect destroyed terrain since they read live cell state rather than a cached
+occlusion grid. This is the query primitive shooter-oriented collision,
+projectiles, and agent perception can build on.
+
 ## Determinism
 
 Determinism is tested by executing equal worlds side by side and comparing a

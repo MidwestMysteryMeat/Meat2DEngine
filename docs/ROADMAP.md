@@ -56,7 +56,7 @@
 - Parallel deterministic chunk scheduling
 - Persistent/infinite world streaming
 - Shooter-oriented collision and projectiles
-- Destructible terrain queries
+- [x] Destructible terrain queries — deterministic `World::raycast`/`line_of_sight`
 - Scripting/mod extension boundary
 - Profiling overlay and replay inspector
 - Authenticated relay fallback for restrictive NAT

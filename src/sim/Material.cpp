@@ -93,6 +93,12 @@ bool is_valid(MaterialId id) noexcept {
     return static_cast<std::size_t>(id) < material_count;
 }
 
+bool blocks_line_of_sight(MaterialId id) noexcept {
+    const auto phase = material_definition(id).phase;
+    return phase == MaterialPhase::Granular || phase == MaterialPhase::Liquid ||
+           phase == MaterialPhase::StaticSolid;
+}
+
 bool has_flag(MaterialId id, MaterialFlags flag) noexcept {
     using Underlying = std::underlying_type_t<MaterialFlags>;
     const auto value = static_cast<Underlying>(material_definition(id).flags);

@@ -80,6 +80,10 @@ struct MaterialDefinition {
 [[nodiscard]] bool is_valid(MaterialId id) noexcept;
 [[nodiscard]] bool has_flag(MaterialId id, MaterialFlags flag) noexcept;
 
+// Granular, liquid, and static-solid cells stop a raycast; empty space, gas,
+// and energy overlays (electricity on top of metal) do not.
+[[nodiscard]] bool blocks_line_of_sight(MaterialId id) noexcept;
+
 inline constexpr std::size_t material_count =
     static_cast<std::size_t>(MaterialId::Count);
 
