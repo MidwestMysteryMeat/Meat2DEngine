@@ -1,6 +1,7 @@
 #include "meat2d/core/Version.hpp"
 #include "meat2d/net/Protocol.hpp"
 #include "meat2d/net/Session.hpp"
+#include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
 
@@ -27,6 +28,7 @@ struct Options {
     std::string mode_name{"Elements"};
     std::string map_name{"Elements Lab"};
     std::string directory_host;
+    std::string persist_directory;
     bool ticks_explicit{};
     bool listen{};
     bool realtime{true};
@@ -72,6 +74,8 @@ Options parse_options(int argc, char** argv) {
             options.directory_host = argv[++index];
         } else if (argument == "--directory-port" && index + 1 < argc) {
             parse_integer(argv[++index], options.directory_port);
+        } else if (argument == "--persist" && index + 1 < argc) {
+            options.persist_directory = argv[++index];
         }
     }
     if (options.listen && !options.ticks_explicit) {
@@ -159,6 +163,17 @@ int run_dedicated_server(const Options& options) {
         .directory_heartbeat_updates = 120,
     });
     seed_server_lab(server.simulation());
+    if (!options.persist_directory.empty()) {
+        const meat2d::ChunkStore store(options.persist_directory);
+        if (store.has_chunk(0, 0)) {
+            const auto loaded = store.load_all(server.simulation().world());
+            std::cout << "Loaded persisted world: " << loaded << " chunks from "
+                      << options.persist_directory << '\n';
+        } else {
+            std::cout << "No persisted world found at " << options.persist_directory
+                      << ", starting fresh\n";
+        }
+    }
     if (!server.start()) {
         std::cerr << "Server start failed: " << server.last_error() << '\n';
         return 1;
@@ -198,6 +213,13 @@ int run_dedicated_server(const Options& options) {
             next_tick += std::chrono::microseconds(1'000'000 / 60);
             std::this_thread::sleep_until(next_tick);
         }
+    }
+
+    if (!options.persist_directory.empty()) {
+        const meat2d::ChunkStore store(options.persist_directory);
+        const auto saved = store.save_all(server.simulation().world());
+        std::cout << "Saved persisted world: " << saved << " chunks to "
+                  << options.persist_directory << '\n';
     }
 
     std::cout << "Server stopped at tick " << server.simulation().world().current_tick()

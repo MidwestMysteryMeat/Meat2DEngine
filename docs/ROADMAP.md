@@ -54,7 +54,12 @@
 ## Later
 
 - Parallel deterministic chunk scheduling
-- Persistent/infinite world streaming
+- [x] Persistent world chunk storage — `ChunkStore` + `meat2d_server --persist`
+      (fixed-size worlds only; see ARCHITECTURE.md's Chunk persistence scope note)
+- Unbounded/streamed world addressing — the larger follow-up ChunkStore's
+  on-disk format is meant to support: a dynamically-keyed chunk map instead
+  of `World`'s current flat, fixed-size array, with every dense-iteration
+  consumer (WorldView, net::ChunkCodec, chunk interest) updated to match
 - [x] Shooter-oriented collision and projectiles — deterministic `ProjectileSystem`
 - [x] Destructible terrain queries — deterministic `World::raycast`/`line_of_sight`
 - Scripting/mod extension boundary

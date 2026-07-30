@@ -122,6 +122,32 @@ session using agents or the organism brush needs its own recording layer
 built the same way — nothing in the sandbox records one of those sessions
 yet.
 
+### Chunk persistence
+
+`meat2d::ChunkStore` (`include/meat2d/sim/ChunkStore.hpp`) is the on-disk
+counterpart to the render layer's dirty-region tracking: `World` already
+exposes each chunk's raw `Cell` array (`chunk_cells`) and a way to overwrite
+one in place (`load_chunk_cells`, which wakes the chunk and its cardinal
+neighbors and marks it fully dirty so rendering/network sync notice). Cell is
+`static_assert`-enforced trivially copyable at exactly 8 bytes, so a chunk
+file is just a small header plus a raw memcpy of `cells_per_chunk` cells —
+`save_all`/`load_all` iterate a world's existing `chunk_columns() ×
+chunk_rows()` grid, one file per chunk, skipping files that don't exist on
+load rather than failing the whole operation. `meat2d_server --persist <dir>`
+is the consumer: load on startup, save on a clean stop.
+
+Scope: chunks are addressed by (column, row) inside a world's existing size
+— this is disk persistence for a fixed-size world, not an unbounded one.
+`World` stores chunks in a flat `std::vector<Chunk>` sized at construction
+(`chunk_index` is `row * chunk_columns_ + column`); a world whose bounds grow
+as the player explores would need that to become a sparse, dynamically-keyed
+map instead, with every consumer that currently assumes dense `0..N-1`
+iteration (`chunks()`, `WorldView`, `net::ChunkCodec`, chunk-interest
+management) updated to match. That is a substantially larger, separate
+change; ChunkStore is the paging primitive it would be built on, not that
+change itself. Also out of scope here, same as replay: `ai::LivingSimulation`
+agents and `life::OrganismField` state, which a chunk file doesn't capture.
+
 ## Determinism
 
 Determinism is tested by executing equal worlds side by side and comparing a

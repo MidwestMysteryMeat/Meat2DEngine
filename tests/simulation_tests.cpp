@@ -9,6 +9,7 @@
 #include "meat2d/net/Session.hpp"
 #include "meat2d/net/UdpSocket.hpp"
 #include "meat2d/replay/Replay.hpp"
+#include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
@@ -1727,6 +1728,67 @@ void test_replay_round_trip_and_divergence() {
     check(diverged.actual_hash == original_hash, "divergence reported the wrong actual hash");
 }
 
+void test_chunk_store_persistence_across_worlds() {
+    const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto directory = std::filesystem::temp_directory_path() / ("meat2d-chunkstore-" + unique);
+    std::error_code error;
+    std::filesystem::remove_all(directory, error);
+
+    meat2d::World source({
+        .width = 128,
+        .height = 128,
+        .seed = 55,
+        .sleep_after_ticks = 30,
+    });
+    for (int y = 0; y < source.height(); ++y) {
+        source.set_material({64, y}, meat2d::MaterialId::Stone);
+    }
+    source.paint_disc({20, 20}, 8, meat2d::MaterialId::Water);
+    for (int tick = 0; tick < 30; ++tick) {
+        source.step();
+    }
+
+    meat2d::ChunkStore store(directory);
+    check(!store.has_chunk(0, 0), "chunk file existed before saving");
+    const auto saved = store.save_all(source);
+    check(saved == static_cast<std::size_t>(source.chunk_columns() * source.chunk_rows()),
+          "save_all did not save every chunk");
+    check(store.has_chunk(0, 0), "save_all did not create a file for chunk (0,0)");
+
+    // A freshly constructed World, not the same instance that was stepped
+    // and saved — this is the actual persistence scenario: reloading a
+    // world in a later process, not just round-tripping in place.
+    meat2d::World restored({
+        .width = 128,
+        .height = 128,
+        .seed = 55,
+        .sleep_after_ticks = 30,
+    });
+    const auto loaded = store.load_all(restored);
+    check(loaded == saved, "load_all did not load every saved chunk");
+
+    // state_hash() folds in current_tick(), which legitimately differs here
+    // (source has stepped 30 times, restored has stepped 0) — chunk_hash()
+    // is the tick-independent per-chunk comparison this scenario calls for.
+    for (std::size_t index = 0; index < source.chunks().size(); ++index) {
+        check(restored.chunk_hash(index) == source.chunk_hash(index),
+              "restored chunk did not match the saved chunk's hash");
+    }
+    for (int y = 0; y < source.height(); ++y) {
+        for (int x = 0; x < source.width(); ++x) {
+            check(restored.material({x, y}) == source.material({x, y}),
+                  "restored world has a mismatched cell");
+        }
+    }
+
+    check(!store.load_chunk(restored, -1, 0), "load_chunk accepted an out-of-range column");
+    check(!store.load_chunk(restored, source.chunk_columns(), 0),
+          "load_chunk accepted a column past the grid");
+    check(!store.has_chunk(-1, -1), "has_chunk reported a file for an out-of-range chunk");
+
+    std::filesystem::remove_all(directory, error);
+}
+
 } // namespace
 
 int main() {
@@ -1767,6 +1829,7 @@ int main() {
         test_projectile_expires_without_impact();
         test_projectile_leaves_world_without_impact();
         test_replay_round_trip_and_divergence();
+        test_chunk_store_persistence_across_worlds();
     } catch (const std::exception& exception) {
         std::cerr << "UNCAUGHT: " << exception.what() << '\n';
         return 1;

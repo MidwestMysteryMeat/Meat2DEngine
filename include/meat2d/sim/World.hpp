@@ -73,6 +73,17 @@ class World {
     [[nodiscard]] std::span<const Chunk> chunks() const noexcept;
     [[nodiscard]] RectI chunk_dirty_rect(std::int32_t column, std::int32_t row) const noexcept;
 
+    // Raw access to one chunk's cell array by grid coordinate, for streaming
+    // a world's chunks to and from disk (see meat2d::ChunkStore). Returns an
+    // empty span for an out-of-range (column, row).
+    [[nodiscard]] std::span<const Cell> chunk_cells(std::int32_t column, std::int32_t row) const noexcept;
+    // Overwrites a chunk's cells in place, wakes it and its cardinal
+    // neighbors so the next step() re-evaluates the new boundary, and marks
+    // it fully dirty for rendering/network sync. `cells` must have exactly
+    // cells_per_chunk entries. Returns false for an out-of-range (column,
+    // row) or a wrong-sized span, leaving the world unchanged.
+    bool load_chunk_cells(std::int32_t column, std::int32_t row, std::span<const Cell> cells) noexcept;
+
   private:
     [[nodiscard]] std::size_t chunk_index(Vec2i position) const noexcept;
     [[nodiscard]] std::size_t local_index(Vec2i position) const noexcept;

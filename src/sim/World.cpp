@@ -383,6 +383,48 @@ RectI World::chunk_dirty_rect(std::int32_t column, std::int32_t row) const noexc
     return {begin_x, begin_y, end_x - begin_x, end_y - begin_y};
 }
 
+std::span<const Cell> World::chunk_cells(std::int32_t column, std::int32_t row) const noexcept {
+    if (column < 0 || row < 0 || column >= chunk_columns_ || row >= chunk_rows_) {
+        return {};
+    }
+    return chunks_[static_cast<std::size_t>(row * chunk_columns_ + column)].cells;
+}
+
+bool World::load_chunk_cells(
+    std::int32_t column,
+    std::int32_t row,
+    std::span<const Cell> cells) noexcept {
+    if (column < 0 || row < 0 || column >= chunk_columns_ || row >= chunk_rows_ ||
+        cells.size() != cells_per_chunk) {
+        return false;
+    }
+
+    auto& chunk = chunks_[static_cast<std::size_t>(row * chunk_columns_ + column)];
+    std::copy(cells.begin(), cells.end(), chunk.cells.begin());
+    chunk.active = true;
+    chunk.changed = true;
+    chunk.quiet_ticks = 0;
+    ++chunk.revision;
+    chunk.dirty.clear();
+    chunk.dirty.include(0, 0);
+    chunk.dirty.include(chunk_size - 1, chunk_size - 1);
+
+    for (const auto& offset : cardinal_directions) {
+        const auto neighbor_column = column + offset.x;
+        const auto neighbor_row = row + offset.y;
+        if (neighbor_column < 0 || neighbor_row < 0 || neighbor_column >= chunk_columns_ ||
+            neighbor_row >= chunk_rows_) {
+            continue;
+        }
+        auto& neighbor =
+            chunks_[static_cast<std::size_t>(neighbor_row * chunk_columns_ + neighbor_column)];
+        neighbor.active = true;
+        neighbor.quiet_ticks = 0;
+    }
+
+    return true;
+}
+
 std::size_t World::chunk_index(Vec2i position) const noexcept {
     const auto chunk_x = position.x / chunk_size;
     const auto chunk_y = position.y / chunk_size;

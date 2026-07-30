@@ -131,6 +131,17 @@ from either its LAN or public server list. Set the directory endpoint there
 before enabling public advertisement. Editor-launched test processes close
 with the editor.
 
+Give the dedicated server a persistence directory to survive restarts — it
+loads any saved chunks on startup and saves the whole world on a clean stop
+(`Ctrl+C`/`SIGTERM`, or hitting `--ticks`):
+
+```bash
+./build/headless/meat2d_server --listen --port 27182 --persist ./world-save
+```
+
+See [Persistence and streaming](#persistence-and-streaming) below for how the
+on-disk format works and what it does not yet cover.
+
 In connected graphical clients, left/right painting is sent as validated,
 tick-targeted input to the server and simultaneously predicted on the local
 replica for immediate feedback. The displayed material world remains the
@@ -220,6 +231,35 @@ Determinism is required for reproducible debugging and compact network
 validation. Multiplayer is server-authoritative; clients are not trusted merely
 because deterministic replay is available.
 
+## Persistence and streaming
+
+`meat2d::ChunkStore` (`include/meat2d/sim/ChunkStore.hpp`) saves and loads a
+`World`'s chunks one file per chunk under a directory, so cold regions of a
+large world don't have to stay resident in memory between sessions, and a
+server or editor can save/restore state without serializing the whole grid
+at once. `meat2d_server --persist <dir>` is the built-in consumer: it loads
+any existing save on startup and writes the whole world back out on a clean
+stop.
+
+This persists chunks within a world's existing size — it does not extend a
+world beyond the bounds it was created with, and it does not cover
+`ai::LivingSimulation` agents or `life::OrganismField` (they carry per-entity
+state a chunk file doesn't capture, so agents respawn fresh on reload). An
+unbounded/streamed world, where chunks page in beyond the initial grid,
+needs `World`'s fixed chunk-grid addressing to become dynamic — a larger
+change ChunkStore's on-disk format is meant to be the paging primitive for,
+not something it does today.
+
+## Determinism replay
+
+`meat2d::replay` records a `World` session (paint events plus periodic
+state-hash checkpoints) to a portable `.replay` file and can deterministically
+re-simulate it, comparing every checkpoint and stopping at the first
+mismatch. `meat2d_replay <file.replay>` is the command-line front end — a
+MATCHED/DIVERGED verdict with the exact divergent tick, useful for catching a
+determinism regression instead of only noticing "the final state differs".
+Like ChunkStore, this covers `World` only, not agents or organisms.
+
 ## Project layout
 
 ```text
@@ -230,6 +270,7 @@ apps/
   server/        headless benchmark and authoritative server
   remote/        headless multiplayer smoke client
   directory/     self-hostable public listing and NAT introduction service
+  replay/        offline .replay file verification (meat2d_replay)
 benchmarks/      simulation throughput checks
 cmake/           installed-package configuration
 docs/            architecture and roadmap
