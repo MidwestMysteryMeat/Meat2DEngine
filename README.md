@@ -149,5 +149,10 @@ See [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md), and
 
 ## License
 
-Meat2D Engine is public software released under the [MIT License](LICENSE).
-SDL is fetched as a separate dependency under its zlib license.
+Licensed under the **[Apache License 2.0](LICENSE)** — free to use, modify, fork and build on, commercially or not.
+
+**Credit is required.** Apache-2.0 §4(c)–(d) obliges you to keep the copyright notice and to reproduce [`NOTICE`](NOTICE) in anything you distribute, including binaries and hosted builds. Credit it as `Meat2DEngine by MysteryMeat` (https://github.com/MidwestMysteryMeat/Meat2DEngine) in your credits screen, About box, or docs. The project name and the MysteryMeat name are not licensed for endorsement or promotion (§6).
+
+SDL is fetched as a separate dependency under its own zlib license.
+
+Previously MIT; relicensed to Apache-2.0 on 2026-07-30. Snapshots released under MIT stay MIT.
