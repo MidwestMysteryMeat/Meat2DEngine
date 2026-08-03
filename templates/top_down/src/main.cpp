@@ -1,11 +1,11 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/core/FixedTimestep.hpp>
 #include <meat2d/net/Session.hpp>
 #include <meat2d/render/WorldView.hpp>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
@@ -14,8 +14,6 @@
 #include <string_view>
 
 namespace {
-
-constexpr double fixed_seconds = 1.0 / 60.0;
 
 std::uint16_t parse_port(const char* text, std::uint16_t fallback) {
     std::uint16_t port = fallback;
@@ -130,7 +128,7 @@ int main(int argc, char** argv) {
 
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
-    double accumulator = 0.0;
+    meat2d::core::FixedTimestep fixed_timestep;
     while (running) {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) {
@@ -141,9 +139,10 @@ int main(int argc, char** argv) {
         }
 
         const auto now = std::chrono::steady_clock::now();
-        accumulator += std::min(0.25, std::chrono::duration<double>(now - previous).count());
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous);
         previous = now;
-        while (accumulator >= fixed_seconds) {
+        const auto fixed = fixed_timestep.advance(elapsed);
+        for (auto step = 0U; step < fixed.steps; ++step) {
             if (networked) {
                 client.update();
                 if (client.connected()) {
@@ -180,7 +179,6 @@ int main(int argc, char** argv) {
                 game.world().paint_disc(target, 3, meat2d::MaterialId::Fire);
             }
             game.step();
-            accumulator -= fixed_seconds;
         }
 
         mark_player(view, game.world(), player);

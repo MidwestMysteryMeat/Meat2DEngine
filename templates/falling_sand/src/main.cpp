@@ -1,18 +1,14 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/core/FixedTimestep.hpp>
 #include <meat2d/render/WorldView.hpp>
 #include <meat2d/sim/Scenario.hpp>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <span>
-
-namespace {
-constexpr double fixed_seconds = 1.0 / 60.0;
-}
 
 int main(int, char**) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -49,7 +45,7 @@ int main(int, char**) {
     meat2d::MaterialId brush = meat2d::MaterialId::Sand;
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
-    double accumulator = 0.0;
+    meat2d::core::FixedTimestep fixed_timestep;
 
     while (running) {
         SDL_Event event{};
@@ -72,9 +68,10 @@ int main(int, char**) {
         }
 
         const auto now = std::chrono::steady_clock::now();
-        accumulator += std::min(0.25, std::chrono::duration<double>(now - previous).count());
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous);
         previous = now;
-        while (accumulator >= fixed_seconds) {
+        const auto fixed = fixed_timestep.advance(elapsed);
+        for (auto step = 0U; step < fixed.steps; ++step) {
             float mouse_x = 0.0F;
             float mouse_y = 0.0F;
             const auto buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
@@ -93,7 +90,6 @@ int main(int, char**) {
                 game.world().paint_disc(target, 4, meat2d::MaterialId::Empty);
             }
             game.step();
-            accumulator -= fixed_seconds;
         }
 
         const auto frame = view.update(game.world());

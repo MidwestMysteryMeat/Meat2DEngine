@@ -1,4 +1,5 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/core/FixedTimestep.hpp>
 #include <meat2d/render/WorldView.hpp>
 
 #include <SDL3/SDL.h>
@@ -11,8 +12,6 @@
 #include <span>
 
 namespace {
-
-constexpr double fixed_seconds = 1.0 / 60.0;
 
 bool passable(const meat2d::World& world, meat2d::Vec2i position) {
     if (!world.in_bounds(position)) {
@@ -94,7 +93,7 @@ int main(int, char**) {
     meat2d::render::WorldView view;
     bool running = true;
     auto previous = std::chrono::steady_clock::now();
-    double accumulator = 0.0;
+    meat2d::core::FixedTimestep fixed_timestep;
 
     while (running) {
         SDL_Event event{};
@@ -105,9 +104,10 @@ int main(int, char**) {
             }
         }
         const auto now = std::chrono::steady_clock::now();
-        accumulator += std::min(0.25, std::chrono::duration<double>(now - previous).count());
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous);
         previous = now;
-        while (accumulator >= fixed_seconds) {
+        const auto fixed = fixed_timestep.advance(elapsed);
+        for (auto step = 0U; step < fixed.steps; ++step) {
             const auto* keys = SDL_GetKeyboardState(nullptr);
             const int horizontal = (keys[SDL_SCANCODE_D] ? 1 : 0) - (keys[SDL_SCANCODE_A] ? 1 : 0);
             const meat2d::Vec2i horizontal_target{player.x + horizontal, player.y};
@@ -128,7 +128,6 @@ int main(int, char**) {
                 vertical_velocity = 0;
             }
             game.step();
-            accumulator -= fixed_seconds;
         }
 
         const auto frame = view.update(

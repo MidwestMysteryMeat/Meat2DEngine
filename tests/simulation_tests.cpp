@@ -34,6 +34,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <string>
@@ -1289,6 +1290,19 @@ void test_project_manager_validation_and_templates() {
         check(std::filesystem::is_regular_file(test_parent / ("template-" + std::to_string(index)) /
                                                "src" / "main.cpp"),
               "selectable game template omitted its source starter");
+    }
+
+    const std::array<std::string_view, 4> fixed_tick_templates{
+        "side_scroller", "top_down", "metroidvania", "falling_sand"};
+    for (const auto template_name : fixed_tick_templates) {
+        std::ifstream source(templates / template_name / "src" / "main.cpp");
+        const std::string contents{std::istreambuf_iterator<char>(source),
+                                   std::istreambuf_iterator<char>()};
+        check(contents.find("meat2d/core/FixedTimestep.hpp") != std::string::npos,
+              "interactive template does not use the shared fixed timestep");
+        check(contents.find("fixed_seconds") == std::string::npos &&
+                  contents.find("double accumulator") == std::string::npos,
+              "interactive template retained a duplicated floating-point accumulator");
     }
 
     std::error_code error;
