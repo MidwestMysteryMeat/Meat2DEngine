@@ -82,10 +82,11 @@ Status: **in progress**
 - [x] Ordered scene lifecycle/component/tag events and deterministic subtree
       duplication for prefab-style composition.
 - [x] Explicit gameplay-group aliases and stable sprite render-layer queries.
+- [x] Named scene registry/stack with deterministic replace, push, and pop flow.
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
-- [ ] Scene transitions and editor-managed prefabs/overrides.
+- [ ] Editor-managed prefab overrides, undo/redo, and scene diffs.
 - [x] Fixed simulation tick accumulator with interpolated rendering contract.
 - [ ] Deterministic serialization for all networked components.
 

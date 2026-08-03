@@ -19,6 +19,7 @@
 #include "meat2d/render/WorldView.hpp"
 #include "meat2d/scene/Physics.hpp"
 #include "meat2d/scene/Scene.hpp"
+#include "meat2d/scene/SceneStack.hpp"
 #include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
@@ -80,6 +81,30 @@ void test_fixed_timestep_accumulator() {
     const auto negative = clock.advance(std::chrono::milliseconds(-1));
     check(negative.steps == 0U && negative.interpolation_alpha == 0.0,
           "fixed timestep accepted negative elapsed time");
+}
+
+void test_scene_stack_transitions() {
+    meat2d::scene::SceneStack stack;
+    check(stack.register_scene("Main", meat2d::scene::Scene("main")) &&
+              stack.register_scene("Pause", meat2d::scene::Scene("pause")) &&
+              stack.register_scene("Game", meat2d::scene::Scene("game")) &&
+              !stack.register_scene("Main", meat2d::scene::Scene("duplicate")) &&
+              stack.active_name() == "Main" && stack.depth() == 1U,
+          "scene stack did not register a deterministic initial scene");
+    check(stack.push("Pause") && stack.active_name() == "Pause" && stack.depth() == 2U &&
+              stack.pop() && stack.active_name() == "Main" && stack.depth() == 1U &&
+              stack.replace("Game") && stack.active_name() == "Game" &&
+              stack.transitions().size() == 3U,
+          "scene stack push/pop/replace transitions were not deterministic");
+    check(stack.transitions()[0].type == meat2d::scene::SceneTransitionType::Push &&
+              stack.transitions()[1].type == meat2d::scene::SceneTransitionType::Pop &&
+              stack.transitions()[2].from == "Main" && stack.transitions()[2].to == "Game",
+          "scene stack did not retain transition history in order");
+    check(stack.unregister_scene("Pause") && !stack.unregister_scene("Game") &&
+              stack.find("Main") != nullptr && stack.active() != nullptr,
+          "scene stack allowed removal of an active scene or lost a registered scene");
+    stack.clear_transitions();
+    check(stack.transitions().empty(), "scene stack could not clear transient transition history");
 }
 
 void test_scene_entity_components_and_hashing() {
@@ -2523,6 +2548,7 @@ int main() {
     try {
         test_cell_layout_and_protocol();
         test_fixed_timestep_accumulator();
+        test_scene_stack_transitions();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
         test_tile_map_content_and_serialization();

@@ -61,6 +61,11 @@ no hierarchy metadata. Gameplay groups use the same deterministic tag storage,
 and `find_sprites_in_layer()` provides stable render-layer queries over sprite
 components without making rendering part of the authoritative world.
 
+`SceneStack` owns named scenes and gives all templates the same immediate
+replace/push/pop flow for menus, rooms, dialogue, pause overlays, and lobbies.
+It records a bounded transition history for editor and telemetry consumers;
+transition effects such as fades remain presentation concerns.
+
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.
 `meat2d::render::Camera2D` uses integer viewport, zoom, and world/screen
