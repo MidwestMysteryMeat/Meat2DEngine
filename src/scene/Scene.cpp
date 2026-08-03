@@ -14,6 +14,7 @@ constexpr std::uint64_t fnv_prime = 1099511628211ULL;
 constexpr std::uint32_t maximum_text_bytes = 1024U * 1024U;
 constexpr std::uint32_t maximum_entities = 1'000'000U;
 constexpr std::uint32_t maximum_tags_per_entity = 256U;
+constexpr std::size_t maximum_scene_events = 16'384U;
 
 bool valid_tag_text(std::string_view tag) noexcept {
     return !tag.empty() && tag.size() <= maximum_text_bytes;
@@ -174,6 +175,7 @@ Scene::Scene(std::string name) : name_(std::move(name)) {}
 
 void Scene::clear() noexcept {
     entities_.clear();
+    events_.clear();
     next_entity_id_ = 1;
 }
 
@@ -194,16 +196,19 @@ EntityId Scene::create_entity(std::string name) {
         .collider = std::nullopt,
         .rigid_body = std::nullopt,
     });
+    emit_event({.type = SceneEventType::EntityCreated, .entity = id, .tag = {}});
     return id;
 }
 
-bool Scene::destroy_entity(EntityId id) noexcept {
+bool Scene::destroy_entity(EntityId id) {
     const auto iterator = std::find_if(
         entities_.begin(), entities_.end(), [id](const Entity& entity) { return entity.id == id; });
     if (iterator == entities_.end()) {
         return false;
     }
+    const auto parent = iterator->parent;
     entities_.erase(iterator);
+    emit_event({.type = SceneEventType::EntityDestroyed, .entity = id, .related = parent, .tag = {}});
     return true;
 }
 
@@ -223,7 +228,7 @@ bool Scene::contains(EntityId id) const noexcept {
     return find(id) != nullptr;
 }
 
-bool Scene::set_parent(EntityId child, EntityId parent) noexcept {
+bool Scene::set_parent(EntityId child, EntityId parent) {
     auto* child_entity = find(child);
     if (child_entity == nullptr || child == invalid_entity || child == parent) {
         return false;
@@ -253,7 +258,13 @@ bool Scene::set_parent(EntityId child, EntityId parent) noexcept {
     if (cursor != invalid_entity) {
         return false;
     }
+    const auto previous_parent = child_entity->parent;
     child_entity->parent = parent;
+    emit_event({.type = SceneEventType::ParentChanged,
+                .entity = child,
+                .related = parent,
+                .previous_related = previous_parent,
+                .tag = {}});
     return true;
 }
 
@@ -297,12 +308,14 @@ bool Scene::add_tag(EntityId id, std::string tag) {
         std::find(entity->tags.begin(), entity->tags.end(), tag) != entity->tags.end()) {
         return false;
     }
+    const auto added_tag = tag;
     entity->tags.push_back(std::move(tag));
     std::sort(entity->tags.begin(), entity->tags.end());
+    emit_event({.type = SceneEventType::TagAdded, .entity = id, .tag = added_tag});
     return true;
 }
 
-bool Scene::remove_tag(EntityId id, std::string_view tag) noexcept {
+bool Scene::remove_tag(EntityId id, std::string_view tag) {
     auto* entity = find(id);
     if (entity == nullptr) {
         return false;
@@ -311,7 +324,9 @@ bool Scene::remove_tag(EntityId id, std::string_view tag) noexcept {
     if (iterator == entity->tags.end()) {
         return false;
     }
+    std::string removed(*iterator);
     entity->tags.erase(iterator);
+    emit_event({.type = SceneEventType::TagRemoved, .entity = id, .tag = std::move(removed)});
     return true;
 }
 
@@ -329,6 +344,96 @@ std::vector<EntityId> Scene::find_tagged(std::string_view tag) const {
         }
     }
     return result;
+}
+
+void Scene::emit_event(SceneEvent event) {
+    if (events_.size() < maximum_scene_events) {
+        events_.push_back(std::move(event));
+    }
+}
+
+std::span<const SceneEvent> Scene::events() const noexcept {
+    return std::span<const SceneEvent>(events_);
+}
+
+void Scene::clear_events() noexcept {
+    events_.clear();
+}
+
+bool Scene::is_in_subtree(EntityId entity, EntityId root) const noexcept {
+    EntityId cursor = entity;
+    for (std::size_t depth = 0; cursor != invalid_entity && depth <= entities_.size();
+         ++depth) {
+        if (cursor == root) {
+            return true;
+        }
+        const auto* current = find(cursor);
+        if (current == nullptr) {
+            return false;
+        }
+        cursor = current->parent;
+    }
+    return false;
+}
+
+std::optional<EntityId> Scene::duplicate_subtree(EntityId source, EntityId parent,
+                                                  std::string name) {
+    if (find(source) == nullptr ||
+        (parent != invalid_entity && (find(parent) == nullptr || is_in_subtree(parent, source)))) {
+        return std::nullopt;
+    }
+
+    std::vector<EntityId> source_ids;
+    for (const auto& entity : entities_) {
+        if (is_in_subtree(entity.id, source)) {
+            source_ids.push_back(entity.id);
+        }
+    }
+    if (source_ids.empty()) {
+        return std::nullopt;
+    }
+
+    std::vector<std::pair<EntityId, EntityId>> mapping;
+    mapping.reserve(source_ids.size());
+    EntityId copied_root = invalid_entity;
+    for (const auto old_id : source_ids) {
+        const auto* original = find(old_id);
+        if (original == nullptr) {
+            return std::nullopt;
+        }
+        const auto new_name = old_id == source && !name.empty() ? name : original->name;
+        const auto new_id = create_entity(new_name);
+        if (new_id == invalid_entity) {
+            return std::nullopt;
+        }
+        auto* copy = find(new_id);
+        copy->enabled = original->enabled;
+        copy->tags = original->tags;
+        copy->transform = original->transform;
+        copy->sprite = original->sprite;
+        copy->collider = original->collider;
+        copy->rigid_body = original->rigid_body;
+        mapping.emplace_back(old_id, new_id);
+        if (old_id == source) {
+            copied_root = new_id;
+        }
+    }
+
+    for (const auto [old_id, new_id] : mapping) {
+        const auto* original = find(old_id);
+        EntityId desired_parent = old_id == source ? parent : invalid_entity;
+        if (old_id != source && original != nullptr) {
+            const auto mapped_parent = std::find_if(
+                mapping.begin(), mapping.end(), [original](const auto& value) {
+                    return value.first == original->parent;
+                });
+            desired_parent = mapped_parent == mapping.end() ? invalid_entity : mapped_parent->second;
+        }
+        if (!set_parent(new_id, desired_parent)) {
+            return std::nullopt;
+        }
+    }
+    return copied_root == invalid_entity ? std::nullopt : std::optional<EntityId>(copied_root);
 }
 
 bool Scene::hierarchy_valid() const noexcept {
@@ -357,75 +462,119 @@ std::span<const Entity> Scene::entities() const noexcept {
     return std::span<const Entity>(entities_);
 }
 
-Transform* Scene::add_transform(EntityId id, Transform value) noexcept {
+Transform* Scene::add_transform(EntityId id, Transform value) {
     auto* entity = find(id);
     if (entity == nullptr) {
         return nullptr;
     }
+    const auto existed = entity->transform.has_value();
     entity->transform = value;
+    if (!existed) {
+        emit_event({.type = SceneEventType::ComponentAdded,
+                    .entity = id,
+                    .component = SceneComponent::Transform,
+                    .tag = {}});
+    }
     return &*entity->transform;
 }
 
-Sprite* Scene::add_sprite(EntityId id, Sprite value) noexcept {
+Sprite* Scene::add_sprite(EntityId id, Sprite value) {
     auto* entity = find(id);
     if (entity == nullptr) {
         return nullptr;
     }
+    const auto existed = entity->sprite.has_value();
     entity->sprite = value;
+    if (!existed) {
+        emit_event({.type = SceneEventType::ComponentAdded,
+                    .entity = id,
+                    .component = SceneComponent::Sprite,
+                    .tag = {}});
+    }
     return &*entity->sprite;
 }
 
-Collider* Scene::add_collider(EntityId id, Collider value) noexcept {
+Collider* Scene::add_collider(EntityId id, Collider value) {
     auto* entity = find(id);
     if (entity == nullptr) {
         return nullptr;
     }
+    const auto existed = entity->collider.has_value();
     entity->collider = value;
+    if (!existed) {
+        emit_event({.type = SceneEventType::ComponentAdded,
+                    .entity = id,
+                    .component = SceneComponent::Collider,
+                    .tag = {}});
+    }
     return &*entity->collider;
 }
 
-RigidBody* Scene::add_rigid_body(EntityId id, RigidBody value) noexcept {
+RigidBody* Scene::add_rigid_body(EntityId id, RigidBody value) {
     auto* entity = find(id);
     if (entity == nullptr) {
         return nullptr;
     }
+    const auto existed = entity->rigid_body.has_value();
     entity->rigid_body = value;
+    if (!existed) {
+        emit_event({.type = SceneEventType::ComponentAdded,
+                    .entity = id,
+                    .component = SceneComponent::RigidBody,
+                    .tag = {}});
+    }
     return &*entity->rigid_body;
 }
 
-bool Scene::remove_transform(EntityId id) noexcept {
+bool Scene::remove_transform(EntityId id) {
     auto* entity = find(id);
     if (entity == nullptr || !entity->transform) {
         return false;
     }
     entity->transform.reset();
+    emit_event({.type = SceneEventType::ComponentRemoved,
+                .entity = id,
+                .component = SceneComponent::Transform,
+                .tag = {}});
     return true;
 }
 
-bool Scene::remove_sprite(EntityId id) noexcept {
+bool Scene::remove_sprite(EntityId id) {
     auto* entity = find(id);
     if (entity == nullptr || !entity->sprite) {
         return false;
     }
     entity->sprite.reset();
+    emit_event({.type = SceneEventType::ComponentRemoved,
+                .entity = id,
+                .component = SceneComponent::Sprite,
+                .tag = {}});
     return true;
 }
 
-bool Scene::remove_collider(EntityId id) noexcept {
+bool Scene::remove_collider(EntityId id) {
     auto* entity = find(id);
     if (entity == nullptr || !entity->collider) {
         return false;
     }
     entity->collider.reset();
+    emit_event({.type = SceneEventType::ComponentRemoved,
+                .entity = id,
+                .component = SceneComponent::Collider,
+                .tag = {}});
     return true;
 }
 
-bool Scene::remove_rigid_body(EntityId id) noexcept {
+bool Scene::remove_rigid_body(EntityId id) {
     auto* entity = find(id);
     if (entity == nullptr || !entity->rigid_body) {
         return false;
     }
     entity->rigid_body.reset();
+    emit_event({.type = SceneEventType::ComponentRemoved,
+                .entity = id,
+                .component = SceneComponent::RigidBody,
+                .tag = {}});
     return true;
 }
 

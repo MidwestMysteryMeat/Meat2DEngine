@@ -79,6 +79,8 @@ Status: **in progress**
 - [x] Initial rigid-body component with gravity, acceleration, limits, and
       collision response.
 - [x] Collision category/mask filtering.
+- [x] Ordered scene lifecycle/component/tag events and deterministic subtree
+      duplication for prefab-style composition.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
 - [ ] Parenting, layers, tags, groups, events, scene transitions, and prefabs.

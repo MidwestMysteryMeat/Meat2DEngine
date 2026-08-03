@@ -221,6 +221,26 @@ void test_scene_hierarchy_and_tags() {
               decoded->world_position(grandchild) == meat2d::Vec2i{115, 62} &&
               decoded->has_tag(child, "actors"),
           "scene hierarchy and tags did not survive serialization");
+
+    scene.clear_events();
+    const auto copied_root = scene.duplicate_subtree(root, meat2d::scene::invalid_entity,
+                                                      "Copied Root");
+    check(copied_root.has_value() && scene.entities().size() == 6U,
+          "scene could not duplicate a complete entity subtree");
+    if (copied_root) {
+        check(scene.find(*copied_root)->name == "Copied Root" &&
+                  scene.world_position(*copied_root) == meat2d::Vec2i{100, 50},
+              "duplicated subtree did not preserve root data");
+    }
+    check(scene.events().size() == 5U &&
+              scene.events().front().type == meat2d::scene::SceneEventType::EntityCreated &&
+              scene.events().back().type == meat2d::scene::SceneEventType::ParentChanged,
+          "subtree duplication did not emit deterministic lifecycle events");
+    scene.clear_events();
+    check(scene.add_sprite(root) != nullptr && scene.remove_sprite(root) &&
+              scene.add_tag(root, "zeta") && scene.remove_tag(root, "zeta") &&
+              scene.events().size() == 4U,
+          "scene component and tag mutations did not emit events");
 }
 
 void test_tile_map_content_and_serialization() {

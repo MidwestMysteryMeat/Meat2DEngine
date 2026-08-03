@@ -16,6 +16,27 @@ inline constexpr EntityId invalid_entity = 0;
 inline constexpr std::uint16_t scene_format_version = 4;
 inline constexpr std::uint16_t minimum_supported_scene_format_version = 3;
 
+enum class SceneEventType : std::uint8_t {
+    EntityCreated,
+    EntityDestroyed,
+    ParentChanged,
+    ComponentAdded,
+    ComponentRemoved,
+    TagAdded,
+    TagRemoved,
+};
+
+enum class SceneComponent : std::uint8_t { Transform, Sprite, Collider, RigidBody };
+
+struct SceneEvent {
+    SceneEventType type{};
+    EntityId entity{};
+    EntityId related{};
+    EntityId previous_related{};
+    SceneComponent component{SceneComponent::Transform};
+    std::string tag;
+};
+
 struct Transform {
     Vec2i position{};
     Vec2i scale{1, 1};
@@ -69,7 +90,7 @@ class Scene {
     void clear() noexcept;
 
     [[nodiscard]] EntityId create_entity(std::string name = {});
-    bool destroy_entity(EntityId id) noexcept;
+    bool destroy_entity(EntityId id);
 
     [[nodiscard]] Entity* find(EntityId id) noexcept;
     [[nodiscard]] const Entity* find(EntityId id) const noexcept;
@@ -78,26 +99,35 @@ class Scene {
     // Parent transforms use local integer positions. A parent may be changed
     // only when it exists and would not introduce a cycle. Scale inheritance
     // is intentionally deferred until the renderer has a matching contract.
-    bool set_parent(EntityId child, EntityId parent) noexcept;
+    bool set_parent(EntityId child, EntityId parent);
     [[nodiscard]] EntityId parent_of(EntityId child) const noexcept;
     [[nodiscard]] Vec2i world_position(EntityId id) const noexcept;
 
     bool add_tag(EntityId id, std::string tag);
-    bool remove_tag(EntityId id, std::string_view tag) noexcept;
+    bool remove_tag(EntityId id, std::string_view tag);
     [[nodiscard]] bool has_tag(EntityId id, std::string_view tag) const noexcept;
     [[nodiscard]] std::vector<EntityId> find_tagged(std::string_view tag) const;
 
     [[nodiscard]] std::span<Entity> entities() noexcept;
     [[nodiscard]] std::span<const Entity> entities() const noexcept;
 
-    [[nodiscard]] Transform* add_transform(EntityId id, Transform value = {}) noexcept;
-    [[nodiscard]] Sprite* add_sprite(EntityId id, Sprite value = {}) noexcept;
-    [[nodiscard]] Collider* add_collider(EntityId id, Collider value = {}) noexcept;
-    [[nodiscard]] RigidBody* add_rigid_body(EntityId id, RigidBody value = {}) noexcept;
-    bool remove_transform(EntityId id) noexcept;
-    bool remove_sprite(EntityId id) noexcept;
-    bool remove_collider(EntityId id) noexcept;
-    bool remove_rigid_body(EntityId id) noexcept;
+    [[nodiscard]] Transform* add_transform(EntityId id, Transform value = {});
+    [[nodiscard]] Sprite* add_sprite(EntityId id, Sprite value = {});
+    [[nodiscard]] Collider* add_collider(EntityId id, Collider value = {});
+    [[nodiscard]] RigidBody* add_rigid_body(EntityId id, RigidBody value = {});
+    bool remove_transform(EntityId id);
+    bool remove_sprite(EntityId id);
+    bool remove_collider(EntityId id);
+    bool remove_rigid_body(EntityId id);
+
+    // Duplicates an entity and all descendants while assigning fresh stable
+    // IDs. The optional parent is used for the copied root; local transforms,
+    // tags, and components are preserved.
+    [[nodiscard]] std::optional<EntityId> duplicate_subtree(
+        EntityId source, EntityId parent = invalid_entity, std::string name = {});
+
+    [[nodiscard]] std::span<const SceneEvent> events() const noexcept;
+    void clear_events() noexcept;
 
     [[nodiscard]] std::optional<RectI> world_collider_bounds(EntityId id) const noexcept;
     [[nodiscard]] std::vector<EntityId> query_colliders(RectI area,
@@ -118,10 +148,13 @@ class Scene {
     [[nodiscard]] static std::optional<Scene> deserialize(std::span<const std::uint8_t> bytes);
 
   private:
+    void emit_event(SceneEvent event);
+    [[nodiscard]] bool is_in_subtree(EntityId entity, EntityId root) const noexcept;
     [[nodiscard]] bool hierarchy_valid() const noexcept;
 
     std::string name_;
     std::vector<Entity> entities_;
+    std::vector<SceneEvent> events_;
     EntityId next_entity_id_{1};
 };
 
