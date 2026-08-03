@@ -413,18 +413,21 @@ std::optional<EntityId> Scene::duplicate_subtree(EntityId source, EntityId paren
         if (original == nullptr) {
             return std::nullopt;
         }
-        const auto new_name = old_id == source && !name.empty() ? name : original->name;
+        // create_entity() may reallocate entities_, so do not retain a pointer
+        // into the vector across that call.
+        const auto original_copy = *original;
+        const auto new_name = old_id == source && !name.empty() ? name : original_copy.name;
         const auto new_id = create_entity(new_name);
         if (new_id == invalid_entity) {
             return std::nullopt;
         }
         auto* copy = find(new_id);
-        copy->enabled = original->enabled;
-        copy->tags = original->tags;
-        copy->transform = original->transform;
-        copy->sprite = original->sprite;
-        copy->collider = original->collider;
-        copy->rigid_body = original->rigid_body;
+        copy->enabled = original_copy.enabled;
+        copy->tags = original_copy.tags;
+        copy->transform = original_copy.transform;
+        copy->sprite = original_copy.sprite;
+        copy->collider = original_copy.collider;
+        copy->rigid_body = original_copy.rigid_body;
         mapping.emplace_back(old_id, new_id);
         if (old_id == source) {
             copied_root = new_id;
