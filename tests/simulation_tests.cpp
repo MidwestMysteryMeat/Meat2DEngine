@@ -191,6 +191,37 @@ void test_scene_collision_queries() {
           "scene returned collider bounds for an unknown entity");
 }
 
+void test_scene_hierarchy_and_tags() {
+    meat2d::scene::Scene scene("hierarchy");
+    const auto root = scene.create_entity("Root");
+    const auto child = scene.create_entity("Child");
+    const auto grandchild = scene.create_entity("Grandchild");
+    check(scene.add_transform(root, {.position = {100, 50}}) != nullptr &&
+              scene.add_transform(child, {.position = {12, 8}}) != nullptr &&
+              scene.add_transform(grandchild, {.position = {3, 4}}) != nullptr,
+          "scene rejected hierarchy transforms");
+    check(scene.set_parent(child, root) && scene.set_parent(grandchild, child),
+          "scene rejected a valid parent hierarchy");
+    check(scene.world_position(grandchild) == meat2d::Vec2i{115, 62},
+          "scene did not compose local positions through its parent hierarchy");
+    check(!scene.set_parent(root, grandchild) && scene.set_parent(child, root),
+          "scene accepted a cyclic parent relationship");
+    check(scene.add_tag(child, "actors") && scene.add_tag(grandchild, "actors") &&
+              scene.add_tag(grandchild, "selectable") && !scene.add_tag(child, "actors"),
+          "scene tag operations did not enforce unique tags");
+    const auto tagged = scene.find_tagged("actors");
+    check(tagged.size() == 2U && tagged[0] == child && tagged[1] == grandchild,
+          "scene tag query did not preserve deterministic entity order");
+    check(scene.remove_tag(grandchild, "selectable") && !scene.has_tag(grandchild, "selectable"),
+          "scene could not remove a tag");
+    const auto encoded = scene.serialize();
+    const auto decoded = meat2d::scene::Scene::deserialize(encoded);
+    check(decoded && decoded->state_hash() == scene.state_hash() &&
+              decoded->world_position(grandchild) == meat2d::Vec2i{115, 62} &&
+              decoded->has_tag(child, "actors"),
+          "scene hierarchy and tags did not survive serialization");
+}
+
 void test_kinematic_scene_motion() {
     meat2d::scene::Scene scene("movement");
     const auto floor = scene.create_entity("Floor");
@@ -1148,11 +1179,18 @@ void test_project_manager_validation_and_templates() {
                                                "build.yml"),
           "generated starter omitted code, presets, or publishing workflow");
 
-    const std::array<meat2d::tools::ProjectTemplate, 4> project_templates{
+    const std::array<meat2d::tools::ProjectTemplate, 11> project_templates{
         meat2d::tools::ProjectTemplate::SideScroller,
         meat2d::tools::ProjectTemplate::TopDown,
+        meat2d::tools::ProjectTemplate::TopDownRts,
         meat2d::tools::ProjectTemplate::Metroidvania,
+        meat2d::tools::ProjectTemplate::Castlevania,
+        meat2d::tools::ProjectTemplate::VisualNovel,
+        meat2d::tools::ProjectTemplate::Rpg,
+        meat2d::tools::ProjectTemplate::DestructibleArtillery,
+        meat2d::tools::ProjectTemplate::CellularRoguelite,
         meat2d::tools::ProjectTemplate::FallingSand,
+        meat2d::tools::ProjectTemplate::SandboxSurvival,
     };
     for (std::size_t index = 0; index < project_templates.size(); ++index) {
         const auto result = manager.create_project({
@@ -2375,6 +2413,7 @@ int main() {
     try {
         test_cell_layout_and_protocol();
         test_scene_entity_components_and_hashing();
+        test_scene_hierarchy_and_tags();
         test_scene_collision_queries();
         test_kinematic_scene_motion();
         test_rigid_body_step_and_particles();

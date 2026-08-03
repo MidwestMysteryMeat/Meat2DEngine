@@ -51,7 +51,8 @@ jobs:
 
   windows:
     name: Windows (MSVC)
-    runs-on: windows-2025
+    # Keep the MSVC generator aligned with the broadly available hosted image.
+    runs-on: windows-2022
     steps:
       - name: Check out source
         uses: actions/checkout@v4

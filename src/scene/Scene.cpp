@@ -13,6 +13,11 @@ constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
 constexpr std::uint64_t fnv_prime = 1099511628211ULL;
 constexpr std::uint32_t maximum_text_bytes = 1024U * 1024U;
 constexpr std::uint32_t maximum_entities = 1'000'000U;
+constexpr std::uint32_t maximum_tags_per_entity = 256U;
+
+bool valid_tag_text(std::string_view tag) noexcept {
+    return !tag.empty() && tag.size() <= maximum_text_bytes;
+}
 
 void hash_byte(std::uint64_t& hash, std::uint8_t value) noexcept {
     hash ^= value;
@@ -156,6 +161,13 @@ bool read_rect(Reader& reader, RectI& rect) noexcept {
            reader.read_i32(rect.width) && reader.read_i32(rect.height);
 }
 
+std::int32_t saturating_i32(std::int64_t value) noexcept {
+    return static_cast<std::int32_t>(std::clamp(
+        value,
+        static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::min()),
+        static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max())));
+}
+
 } // namespace
 
 Scene::Scene(std::string name) : name_(std::move(name)) {}
@@ -175,6 +187,8 @@ EntityId Scene::create_entity(std::string name) {
         .id = id,
         .name = std::move(name),
         .enabled = true,
+        .parent = invalid_entity,
+        .tags = {},
         .transform = std::nullopt,
         .sprite = std::nullopt,
         .collider = std::nullopt,
@@ -207,6 +221,132 @@ const Entity* Scene::find(EntityId id) const noexcept {
 
 bool Scene::contains(EntityId id) const noexcept {
     return find(id) != nullptr;
+}
+
+bool Scene::set_parent(EntityId child, EntityId parent) noexcept {
+    auto* child_entity = find(child);
+    if (child_entity == nullptr || child == invalid_entity || child == parent) {
+        return false;
+    }
+    if (parent != invalid_entity && find(parent) == nullptr) {
+        return false;
+    }
+    if (child_entity->parent == parent) {
+        return true;
+    }
+
+    // Walk the proposed parent chain before changing the child. This keeps
+    // hierarchy operations deterministic and prevents cycles even when a
+    // caller repeatedly reparents entities during editor operations.
+    EntityId cursor = parent;
+    for (std::size_t depth = 0; cursor != invalid_entity && depth <= entities_.size();
+         ++depth) {
+        if (cursor == child) {
+            return false;
+        }
+        const auto* ancestor = find(cursor);
+        if (ancestor == nullptr) {
+            return false;
+        }
+        cursor = ancestor->parent;
+    }
+    if (cursor != invalid_entity) {
+        return false;
+    }
+    child_entity->parent = parent;
+    return true;
+}
+
+EntityId Scene::parent_of(EntityId child) const noexcept {
+    const auto* entity = find(child);
+    return entity == nullptr ? invalid_entity : entity->parent;
+}
+
+Vec2i Scene::world_position(EntityId id) const noexcept {
+    const auto* entity = find(id);
+    if (entity == nullptr) {
+        return {};
+    }
+    std::int64_t x = 0;
+    std::int64_t y = 0;
+    EntityId cursor = id;
+    for (std::size_t depth = 0; cursor != invalid_entity && depth <= entities_.size();
+         ++depth) {
+        const auto* current = find(cursor);
+        if (current == nullptr) {
+            return {};
+        }
+        if (current->transform) {
+            x += current->transform->position.x;
+            y += current->transform->position.y;
+        }
+        cursor = current->parent;
+    }
+    if (cursor != invalid_entity) {
+        return {};
+    }
+    return {.x = saturating_i32(x), .y = saturating_i32(y)};
+}
+
+bool Scene::add_tag(EntityId id, std::string tag) {
+    if (!valid_tag_text(tag)) {
+        return false;
+    }
+    auto* entity = find(id);
+    if (entity == nullptr || entity->tags.size() >= maximum_tags_per_entity ||
+        std::find(entity->tags.begin(), entity->tags.end(), tag) != entity->tags.end()) {
+        return false;
+    }
+    entity->tags.push_back(std::move(tag));
+    std::sort(entity->tags.begin(), entity->tags.end());
+    return true;
+}
+
+bool Scene::remove_tag(EntityId id, std::string_view tag) noexcept {
+    auto* entity = find(id);
+    if (entity == nullptr) {
+        return false;
+    }
+    const auto iterator = std::find(entity->tags.begin(), entity->tags.end(), tag);
+    if (iterator == entity->tags.end()) {
+        return false;
+    }
+    entity->tags.erase(iterator);
+    return true;
+}
+
+bool Scene::has_tag(EntityId id, std::string_view tag) const noexcept {
+    const auto* entity = find(id);
+    return entity != nullptr &&
+           std::find(entity->tags.begin(), entity->tags.end(), tag) != entity->tags.end();
+}
+
+std::vector<EntityId> Scene::find_tagged(std::string_view tag) const {
+    std::vector<EntityId> result;
+    for (const auto& entity : entities_) {
+        if (std::find(entity.tags.begin(), entity.tags.end(), tag) != entity.tags.end()) {
+            result.push_back(entity.id);
+        }
+    }
+    return result;
+}
+
+bool Scene::hierarchy_valid() const noexcept {
+    for (const auto& entity : entities_) {
+        EntityId cursor = entity.parent;
+        for (std::size_t depth = 0; cursor != invalid_entity && depth <= entities_.size();
+             ++depth) {
+            const auto* ancestor = find(cursor);
+            if (ancestor == nullptr) {
+                return false;
+            }
+            cursor = ancestor->parent;
+        }
+        if (cursor != invalid_entity) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::span<Entity> Scene::entities() noexcept {
@@ -295,10 +435,9 @@ std::optional<RectI> Scene::world_collider_bounds(EntityId id) const noexcept {
         return std::nullopt;
     }
     auto bounds = entity->collider->bounds;
-    if (entity->transform) {
-        bounds.x += entity->transform->position.x;
-        bounds.y += entity->transform->position.y;
-    }
+    const auto position = world_position(id);
+    bounds.x += position.x;
+    bounds.y += position.y;
     return bounds;
 }
 
@@ -347,6 +486,11 @@ std::uint64_t Scene::state_hash() const noexcept {
         hash_integer(hash, entity.id);
         hash_text(hash, entity.name);
         hash_byte(hash, static_cast<std::uint8_t>(entity.enabled));
+        hash_integer(hash, entity.parent);
+        hash_integer(hash, static_cast<std::uint32_t>(entity.tags.size()));
+        for (const auto& tag : entity.tags) {
+            hash_text(hash, tag);
+        }
 
         hash_byte(hash, static_cast<std::uint8_t>(entity.transform.has_value()));
         if (entity.transform) {
@@ -394,9 +538,19 @@ std::vector<std::uint8_t> Scene::serialize() const {
         return {};
     }
     for (const auto& entity : entities_) {
-        if (entity.name.size() > maximum_text_bytes) {
+        if (entity.name.size() > maximum_text_bytes || entity.tags.size() > maximum_tags_per_entity ||
+            entity.parent == entity.id ||
+            (entity.parent != invalid_entity && !contains(entity.parent))) {
             return {};
         }
+        for (const auto& tag : entity.tags) {
+            if (!valid_tag_text(tag)) {
+                return {};
+            }
+        }
+    }
+    if (!hierarchy_valid()) {
+        return {};
     }
     std::vector<std::uint8_t> bytes;
     bytes.reserve(32U + name_.size() + entities_.size() * 64U);
@@ -412,6 +566,11 @@ std::vector<std::uint8_t> Scene::serialize() const {
         append_u32(bytes, entity.id);
         append_u8(bytes, static_cast<std::uint8_t>(entity.enabled));
         append_text(bytes, entity.name);
+        append_u32(bytes, entity.parent);
+        append_u32(bytes, static_cast<std::uint32_t>(entity.tags.size()));
+        for (const auto& tag : entity.tags) {
+            append_text(bytes, tag);
+        }
         const auto flags = static_cast<std::uint8_t>(
             static_cast<std::uint8_t>(entity.transform.has_value()) |
             static_cast<std::uint8_t>(entity.sprite.has_value() << 1U) |
@@ -464,7 +623,8 @@ std::optional<Scene> Scene::deserialize(std::span<const std::uint8_t> bytes) {
     }
 
     std::uint16_t version{};
-    if (!reader.read_u16(version) || version != scene_format_version) {
+    if (!reader.read_u16(version) ||
+        (version != minimum_supported_scene_format_version && version != scene_format_version)) {
         return std::nullopt;
     }
     Scene result;
@@ -485,12 +645,31 @@ std::optional<Scene> Scene::deserialize(std::span<const std::uint8_t> bytes) {
         Entity entity;
         std::uint8_t enabled{};
         std::uint8_t flags{};
+        std::uint32_t tag_count{};
         if (!reader.read_u32(entity.id) || entity.id == invalid_entity || entity.id <= previous_id ||
             !reader.read_u8(enabled) || enabled > 1U || !reader.read_text(entity.name) ||
-            !reader.read_u8(flags) || (flags & 0xF0U) != 0U) {
+            (version == scene_format_version && !reader.read_u32(entity.parent)) ||
+            (version == scene_format_version &&
+             (!reader.read_u32(tag_count) || tag_count > maximum_tags_per_entity))) {
             return std::nullopt;
         }
         entity.enabled = enabled != 0U;
+        if (version == scene_format_version) {
+            entity.tags.reserve(tag_count);
+            std::string previous_tag;
+            for (std::uint32_t tag_index = 0; tag_index < tag_count; ++tag_index) {
+                std::string tag;
+                if (!reader.read_text(tag) || !valid_tag_text(tag) ||
+                    (!previous_tag.empty() && tag <= previous_tag)) {
+                    return std::nullopt;
+                }
+                entity.tags.push_back(std::move(tag));
+                previous_tag = entity.tags.back();
+            }
+        }
+        if (!reader.read_u8(flags) || (flags & 0xF0U) != 0U) {
+            return std::nullopt;
+        }
         if ((flags & 0x01U) != 0U) {
             Transform transform;
             if (!reader.read_i32(transform.position.x) || !reader.read_i32(transform.position.y) ||
@@ -541,7 +720,7 @@ std::optional<Scene> Scene::deserialize(std::span<const std::uint8_t> bytes) {
         result.entities_.push_back(std::move(entity));
     }
     if (reader.remaining() != 0U ||
-        (previous_id != 0U && result.next_entity_id_ <= previous_id)) {
+        (previous_id != 0U && result.next_entity_id_ <= previous_id) || !result.hierarchy_valid()) {
         return std::nullopt;
     }
     return result;

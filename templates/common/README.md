@@ -62,8 +62,10 @@ to initialize Git, create a GitHub repository with `gh`, and push this project.
 ## Next steps
 
 - Put game code under `src/`.
-- Treat the selected starter as a focused starting point: side-scroller,
-  top-down, metroidvania, or falling-sand.
+- Treat the selected starter as a focused starting point. Available families
+  include side-scroller, action-platformer, top-down, top-down RTS, RPG,
+  visual novel, destructible artillery, cellular roguelite, falling-sand, and
+  sandbox survival.
 - Use the editor's Code & Assets tab to edit source, import PNG/audio/font
   assets, and create `*.sprite.toml` frame/animation metadata.
 - Change the package version when preparing releases.

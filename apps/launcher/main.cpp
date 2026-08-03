@@ -1062,7 +1062,7 @@ void draw_start(EditorState& state, SDL_Window* window) {
     ImGui::TextDisabled("%s", meat2d::version_string.data());
     ImGui::SeparatorText("Create a game");
     ImGui::TextWrapped(
-        "Choose a C++ starter for a side-scroller, top-down game, metroidvania, or falling-sand project.");
+        "Choose a C++ starter for a side-scroller, action-platformer, top-down game, RTS, visual novel, RPG, destructible artillery, cellular roguelite, falling-sand, or sandbox-survival project.");
     ImGui::InputText("Project name", &state.new_name);
     ImGui::SetNextItemWidth(-90.0F);
     ImGui::InputText("Destination", &state.new_directory);
@@ -1070,19 +1070,41 @@ void draw_start(EditorState& state, SDL_Window* window) {
     if (ImGui::Button("Browse##new")) {
         SDL_ShowOpenFolderDialog(new_project_folder_callback, nullptr, window, nullptr, false);
     }
-    const char* templates[] = {"Side scroller", "Top-down game", "Metroidvania", "Falling sand"};
-    ImGui::Combo("Game type", &state.new_template, templates, 4);
+    const char* templates[] = {"Side scroller", "Top-down game", "Top-down RTS", "Metroidvania",
+                               "Castlevania-style", "Visual novel", "RPG", "Destructible artillery",
+                               "Cellular roguelite", "Falling sand", "Sandbox survival"};
+    ImGui::Combo("Game type", &state.new_template, templates, 11);
     if (ImGui::Button("Create and open", {160.0F, 0.0F})) {
         const auto result = state.manager.create_project({
             .name = state.new_name,
             .directory = state.new_directory,
-            .project_template = state.new_template == 0
-                                    ? meat2d::tools::ProjectTemplate::SideScroller
-                                    : state.new_template == 1
-                                          ? meat2d::tools::ProjectTemplate::TopDown
-                                          : state.new_template == 2
-                                                ? meat2d::tools::ProjectTemplate::Metroidvania
-                                                : meat2d::tools::ProjectTemplate::FallingSand,
+            .project_template = [&] {
+                using meat2d::tools::ProjectTemplate;
+                switch (state.new_template) {
+                case 0:
+                    return ProjectTemplate::SideScroller;
+                case 1:
+                    return ProjectTemplate::TopDown;
+                case 2:
+                    return ProjectTemplate::TopDownRts;
+                case 3:
+                    return ProjectTemplate::Metroidvania;
+                case 4:
+                    return ProjectTemplate::Castlevania;
+                case 5:
+                    return ProjectTemplate::VisualNovel;
+                case 6:
+                    return ProjectTemplate::Rpg;
+                case 7:
+                    return ProjectTemplate::DestructibleArtillery;
+                case 8:
+                    return ProjectTemplate::CellularRoguelite;
+                case 9:
+                    return ProjectTemplate::FallingSand;
+                default:
+                    return ProjectTemplate::SandboxSurvival;
+                }
+            }(),
             .engine_git_tag = "main",
         });
         state.status = result.summary + (result.details.empty() ? "" : ": " + result.details);

@@ -3,8 +3,9 @@
 ## Objective
 
 Meat2D is intended to become a general-purpose C++20-first 2D engine for
-side-scrollers, top-down games, metroidvanias, shooters, sandboxes, and
-destructible-terrain games. It should provide selectable game-type templates,
+side-scrollers, top-down games, RTS, RPGs, visual novels, metroidvanias,
+shooters, sandboxes, cellular roguelites, and destructible-terrain games. It
+should provide selectable game-type templates,
 similar to the starter/project workflows of larger engines.
 
 The project should not attempt to reproduce every feature of a general-purpose
@@ -55,8 +56,10 @@ Status: **in progress**
       project-path parsing.
 - [ ] Add release tags, changelog, migration notes, generated API docs,
       checksums, and an SBOM.
-- [x] Correct product positioning and expose side-scroller, top-down,
-      metroidvania, and falling-sand project selectors.
+- [x] Correct product positioning and expose independent genre selectors.
+- [ ] Cover side-scroller, action-platformer, top-down, top-down RTS, RPG,
+      visual novel, destructible artillery, cellular roguelite, falling-sand,
+      and sandbox-survival starters.
 
 Acceptance gate: a clean checkout builds, tests, installs, packages, and is
 consumed by `tests/package_consumer` on supported CI platforms.
@@ -168,7 +171,8 @@ authoritative state, not only the cellular World.
 Status: planned
 
 - [ ] Beginner tutorial and one-hour game guide.
-- [ ] Multiplayer, platformer, destructible-terrain, and modding samples.
+- [ ] Multiplayer, platformer, destructible-terrain, cellular-roguelite,
+      sandbox-survival, RPG, and modding samples.
 - [ ] API reference, architecture diagrams, security policy, and contribution
       templates.
 - [ ] Windows/Linux/macOS packages, package-manager recipes, and binary SDKs.

@@ -62,7 +62,9 @@ editor, selectable game-type starters, and one-command packaging.
 - Graphical project editor with guarded code/config editing, native asset
   import, external-change detection, PNG/JPEG preview, sprite-sheet grids, and
   animation metadata
-- Side-scroller, top-down, metroidvania, and falling-sand starters plus
+- Side-scroller, action-platformer, top-down, top-down RTS, RPG, visual-novel,
+  destructible-artillery, cellular-roguelite, falling-sand, and sandbox-survival
+  starters plus
   background build, test, package, and GitHub publishing actions
 - Editor-hosted test sessions with one-click local hosting and direct, LAN, or
   public-directory joins
@@ -328,7 +330,8 @@ See [Networking](docs/NETWORKING.md), [AI and Life](docs/AI_AND_LIFE.md),
 [Materials](docs/MATERIALS.md), [Architecture](docs/ARCHITECTURE.md),
 [Roadmap](docs/ROADMAP.md), and the
 [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap's open
-items. See [Project editor](docs/EDITOR.md) for the
+items. See [Template taxonomy](docs/TEMPLATE_TAXONOMY.md) for the genre
+starter boundaries and production gate. See [Project editor](docs/EDITOR.md) for the
 code/asset browser, sprite workflow, hosted test sessions, and one-click
 build/package tools.
 

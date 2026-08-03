@@ -33,14 +33,18 @@ That ordering is part of the determinism contract.
 
 Ordinary game actors live in `meat2d::scene::Scene`, separate from the cellular
 `World`. A scene currently provides stable non-reused entity IDs plus optional
-transform, sprite, and collider components. This lets side-scrollers,
-top-down games, and metroidvanias share a gameplay substrate without requiring
-cellular materials to be their primary mechanic.
+transform, sprite, collider, and rigid-body components. Entities can be
+parented with cycle checks, query their composed integer world position, and be
+grouped with deterministic tags. This lets side-scrollers, top-down games,
+RTS, RPGs, visual novels, and metroidvanias share a gameplay substrate without
+requiring cellular materials to be their primary mechanic.
 
 Scene documents use a versioned little-endian `M2SC` format and are independent
 of the network packet protocol. `Scene::state_hash()` hashes serialized field
 values rather than addresses or structure padding, providing a deterministic
-baseline for future editor, save, and replication work.
+baseline for future editor, save, and replication work. Version 4 adds parent
+IDs and sorted tags while the decoder still accepts version 3 documents with
+no hierarchy metadata.
 
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.

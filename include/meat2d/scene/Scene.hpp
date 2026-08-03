@@ -13,7 +13,8 @@ namespace meat2d::scene {
 
 using EntityId = std::uint32_t;
 inline constexpr EntityId invalid_entity = 0;
-inline constexpr std::uint16_t scene_format_version = 3;
+inline constexpr std::uint16_t scene_format_version = 4;
+inline constexpr std::uint16_t minimum_supported_scene_format_version = 3;
 
 struct Transform {
     Vec2i position{};
@@ -53,6 +54,8 @@ struct Entity {
     EntityId id{};
     std::string name;
     bool enabled{true};
+    EntityId parent{invalid_entity};
+    std::vector<std::string> tags;
     std::optional<Transform> transform;
     std::optional<Sprite> sprite;
     std::optional<Collider> collider;
@@ -71,6 +74,18 @@ class Scene {
     [[nodiscard]] Entity* find(EntityId id) noexcept;
     [[nodiscard]] const Entity* find(EntityId id) const noexcept;
     [[nodiscard]] bool contains(EntityId id) const noexcept;
+
+    // Parent transforms use local integer positions. A parent may be changed
+    // only when it exists and would not introduce a cycle. Scale inheritance
+    // is intentionally deferred until the renderer has a matching contract.
+    bool set_parent(EntityId child, EntityId parent) noexcept;
+    [[nodiscard]] EntityId parent_of(EntityId child) const noexcept;
+    [[nodiscard]] Vec2i world_position(EntityId id) const noexcept;
+
+    bool add_tag(EntityId id, std::string tag);
+    bool remove_tag(EntityId id, std::string_view tag) noexcept;
+    [[nodiscard]] bool has_tag(EntityId id, std::string_view tag) const noexcept;
+    [[nodiscard]] std::vector<EntityId> find_tagged(std::string_view tag) const;
 
     [[nodiscard]] std::span<Entity> entities() noexcept;
     [[nodiscard]] std::span<const Entity> entities() const noexcept;
@@ -103,6 +118,8 @@ class Scene {
     [[nodiscard]] static std::optional<Scene> deserialize(std::span<const std::uint8_t> bytes);
 
   private:
+    [[nodiscard]] bool hierarchy_valid() const noexcept;
+
     std::string name_;
     std::vector<Entity> entities_;
     EntityId next_entity_id_{1};

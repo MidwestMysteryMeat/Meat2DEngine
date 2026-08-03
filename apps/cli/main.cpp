@@ -11,7 +11,7 @@ namespace {
 
 void print_usage() {
     std::cout << "Meat2D project tools\n\n"
-              << "  meat2d new NAME [--directory PATH] [--template side|top|metroidvania|falling-sand]\n"
+              << "  meat2d new NAME [--directory PATH] [--template side|top|rts|metroidvania|castlevania|visual-novel|rpg|artillery|cellular-roguelite|falling-sand|sandbox-survival]\n"
               << "  meat2d build PATH [--release]\n"
               << "  meat2d run PATH\n"
               << "  meat2d package PATH\n"
@@ -89,14 +89,32 @@ int main(int argc, char** argv) {
                     options.project_template = meat2d::tools::ProjectTemplate::SideScroller;
                 } else if (choice == "top" || choice == "top-down") {
                     options.project_template = meat2d::tools::ProjectTemplate::TopDown;
+                } else if (choice == "rts" || choice == "top-down-rts" || choice == "top_down_rts") {
+                    options.project_template = meat2d::tools::ProjectTemplate::TopDownRts;
                 } else if (choice == "metroidvania") {
                     options.project_template = meat2d::tools::ProjectTemplate::Metroidvania;
+                } else if (choice == "castlevania") {
+                    options.project_template = meat2d::tools::ProjectTemplate::Castlevania;
+                } else if (choice == "visual-novel" || choice == "visual_novel" ||
+                           choice == "vn") {
+                    options.project_template = meat2d::tools::ProjectTemplate::VisualNovel;
+                } else if (choice == "rpg") {
+                    options.project_template = meat2d::tools::ProjectTemplate::Rpg;
+                } else if (choice == "artillery" || choice == "destructible-artillery" ||
+                           choice == "worms" || choice == "liero") {
+                    options.project_template = meat2d::tools::ProjectTemplate::DestructibleArtillery;
+                } else if (choice == "cellular-roguelite" || choice == "cellular_roguelite" ||
+                           choice == "noita") {
+                    options.project_template = meat2d::tools::ProjectTemplate::CellularRoguelite;
+                } else if (choice == "sandbox-survival" || choice == "sandbox_survival" ||
+                           choice == "terraria") {
+                    options.project_template = meat2d::tools::ProjectTemplate::SandboxSurvival;
                 } else if (choice == "falling-sand" || choice == "falling_sand" ||
                            choice == "sand") {
                     options.project_template = meat2d::tools::ProjectTemplate::FallingSand;
                 } else {
                     std::cerr << "Unknown template: " << choice
-                              << " (choose side, top, metroidvania, or falling-sand)\n";
+                              << " (choose side, top, rts, metroidvania, castlevania, visual-novel, rpg, artillery, cellular-roguelite, falling-sand, or sandbox-survival)\n";
                     return 1;
                 }
             } else if (argument == "--engine-tag" && index + 1 < argc) {

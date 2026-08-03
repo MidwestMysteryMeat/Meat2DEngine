@@ -13,7 +13,19 @@ locate_template_root(const std::filesystem::path& executable_path = {});
 [[nodiscard]] std::string locate_cmake_executable();
 [[nodiscard]] std::string locate_ninja_executable(std::string_view cmake_executable = {});
 
-enum class ProjectTemplate { SideScroller, TopDown, Metroidvania, FallingSand };
+enum class ProjectTemplate {
+    SideScroller,
+    TopDown,
+    TopDownRts,
+    Metroidvania,
+    Castlevania,
+    VisualNovel,
+    Rpg,
+    DestructibleArtillery,
+    CellularRoguelite,
+    SandboxSurvival,
+    FallingSand,
+};
 
 enum class BuildProfile { Debug, Release };
 

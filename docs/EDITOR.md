@@ -17,7 +17,11 @@ The welcome screen lets you choose a game-type starter:
 
 - side-scroller, with platform movement and paintable simulation;
 - top-down, with four-direction movement and a simulation arena;
-- metroidvania, with side-view traversal and platform layout;
+- metroidvania/action-platformer, with side-view traversal and platform layout;
+- top-down RTS, with multiplayer-first unit-command structure;
+- RPG and visual novel, with authored progression or dialogue state;
+- destructible artillery, cellular roguelite, falling-sand, and sandbox
+  survival, with increasingly simulation-heavy world defaults;
 - falling-sand, with the focused deterministic elements laboratory.
 
 Native folder dialogs are available, while every path remains directly
@@ -158,7 +162,13 @@ The same workflow is scriptable:
 meat2d new "My Game" --template side
 meat2d new "My Game" --template top
 meat2d new "My Game" --template metroidvania
+meat2d new "My Game" --template rts
+meat2d new "My Game" --template rpg
+meat2d new "My Game" --template visual-novel
+meat2d new "My Game" --template artillery
+meat2d new "My Game" --template cellular-roguelite
 meat2d new "My Game" --template falling-sand
+meat2d new "My Game" --template sandbox-survival
 meat2d build my-game
 meat2d run my-game
 meat2d package my-game
