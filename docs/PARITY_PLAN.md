@@ -83,10 +83,11 @@ Status: **in progress**
       duplication for prefab-style composition.
 - [x] Explicit gameplay-group aliases and stable sprite render-layer queries.
 - [x] Named scene registry/stack with deterministic replace, push, and pop flow.
+- [x] Bounded snapshot-backed scene undo/redo with branch invalidation.
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
-- [ ] Editor-managed prefab overrides, undo/redo, and scene diffs.
+- [ ] Editor-managed prefab overrides and scene diffs.
 - [x] Fixed simulation tick accumulator with interpolated rendering contract.
 - [ ] Deterministic serialization for all networked components.
 

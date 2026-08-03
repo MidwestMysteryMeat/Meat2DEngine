@@ -66,6 +66,11 @@ replace/push/pop flow for menus, rooms, dialogue, pause overlays, and lobbies.
 It records a bounded transition history for editor and telemetry consumers;
 transition effects such as fades remain presentation concerns.
 
+`SceneHistory` provides bounded snapshot undo/redo for editor mutations. It
+uses the scene document itself as the checkpoint contract, so hierarchy,
+components, groups, and render-layer data cannot acquire a separate undo
+representation with different serialization semantics.
+
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.
 `meat2d::render::Camera2D` uses integer viewport, zoom, and world/screen

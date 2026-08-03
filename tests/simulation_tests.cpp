@@ -19,6 +19,7 @@
 #include "meat2d/render/WorldView.hpp"
 #include "meat2d/scene/Physics.hpp"
 #include "meat2d/scene/Scene.hpp"
+#include "meat2d/scene/SceneHistory.hpp"
 #include "meat2d/scene/SceneStack.hpp"
 #include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Projectile.hpp"
@@ -105,6 +106,28 @@ void test_scene_stack_transitions() {
           "scene stack allowed removal of an active scene or lost a registered scene");
     stack.clear_transitions();
     check(stack.transitions().empty(), "scene stack could not clear transient transition history");
+}
+
+void test_scene_history_undo_redo() {
+    meat2d::scene::SceneHistory history(meat2d::scene::Scene("history"), 3U);
+    const auto actor = history.scene().create_entity("Actor");
+    check(history.checkpoint() && history.undo_count() == 1U && history.redo_count() == 0U,
+          "scene history could not record its first edit");
+    check(history.scene().add_group(actor, "player") && history.checkpoint() &&
+              history.undo_count() == 2U,
+          "scene history could not checkpoint a second edit");
+    check(history.undo() && history.scene().contains(actor) &&
+              !history.scene().has_group(actor, "player") && history.redo_count() == 1U,
+          "scene history undo did not restore the prior scene state");
+    check(history.redo() && history.scene().has_group(actor, "player") &&
+              history.undo_count() == 2U,
+          "scene history redo did not restore the forward scene state");
+    check(history.scene().add_group(actor, "selected") && history.checkpoint() &&
+              history.redo_count() == 0U,
+          "scene history did not discard a stale redo branch after editing");
+    history.clear_history();
+    check(history.undo_count() == 0U && history.redo_count() == 0U,
+          "scene history could not establish a new baseline");
 }
 
 void test_scene_entity_components_and_hashing() {
@@ -2549,6 +2572,7 @@ int main() {
         test_cell_layout_and_protocol();
         test_fixed_timestep_accumulator();
         test_scene_stack_transitions();
+        test_scene_history_undo_redo();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
         test_tile_map_content_and_serialization();
