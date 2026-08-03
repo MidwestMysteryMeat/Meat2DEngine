@@ -1470,6 +1470,7 @@ void test_authoritative_client_server_session() {
         .snapshot_interval_ticks = 1,
         .chunk_interval_ticks = 1,
         .client_timeout_updates = 100,
+        .public_directory = std::nullopt,
     });
     check(server.start(), "authoritative server failed to start");
     if (!server.running()) {
@@ -1553,6 +1554,7 @@ void test_prediction_and_reconciliation() {
         .snapshot_interval_ticks = 1,
         .chunk_interval_ticks = 1,
         .client_timeout_updates = 100,
+        .public_directory = std::nullopt,
     });
     check(server.start(), "prediction test server failed to start");
     if (!server.running()) {
