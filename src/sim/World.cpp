@@ -178,6 +178,11 @@ std::size_t World::paint_disc(Vec2i center, std::int32_t radius, MaterialId mate
 RaycastHit World::raycast(Vec2i origin, Vec2i target) const noexcept {
     RaycastHit hit{target, MaterialId::Empty, false};
     if (!in_bounds(origin) || !in_bounds(target)) {
+        // Conservative: a ray with an out-of-bounds endpoint must never
+        // report a clear line, or callers (projectiles, line_of_sight)
+        // would treat unmapped space as open and tunnel through walls.
+        hit.position = in_bounds(origin) ? target : origin;
+        hit.blocked = true;
         return hit;
     }
 
@@ -617,6 +622,12 @@ bool World::load_chunk_cells(
 
     auto& chunk = chunks_[static_cast<std::size_t>(row * chunk_columns_ + column)];
     std::copy(cells.begin(), cells.end(), chunk.cells.begin());
+    // Normalize the epoch just like the netcode decode path does: a saved
+    // epoch that happens to equal the current tick would make update_cell
+    // skip the restored cell for one tick.
+    for (auto& value : chunk.cells) {
+        value.updated_epoch = 0;
+    }
     chunk.active = true;
     chunk.changed = true;
     chunk.quiet_ticks = 0;

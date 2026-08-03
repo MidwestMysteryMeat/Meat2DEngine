@@ -187,6 +187,13 @@ bool ReplayLog::decode(std::span<const std::uint8_t> bytes) {
     }
 
     config_ = config;
+    // Enforce tick ordering: play() consumes events strictly head-first, so a
+    // single out-of-order event in a hand-edited or corrupted file would
+    // silently block itself and every later event while still Matching.
+    // Stable sort preserves the relative order of same-tick events.
+    std::stable_sort(
+        paint_events.begin(), paint_events.end(),
+        [](const PaintEvent& lhs, const PaintEvent& rhs) { return lhs.tick < rhs.tick; });
     paint_events_ = std::move(paint_events);
     checkpoints_ = std::move(checkpoints);
     return true;
@@ -200,6 +207,13 @@ ReplayResult play(const ReplayLog& log, Tick total_ticks) {
     std::size_t next_checkpoint = 0;
 
     for (Tick step_index = 0; step_index < total_ticks; ++step_index) {
+        // Skip past stale events (tick already behind the world) so one
+        // out-of-order record — possible via record_paint called with a
+        // past tick — cannot block every later event. decode() sorts file
+        // input, so this only fires for logs built out of order in memory.
+        while (next_paint < paints.size() && paints[next_paint].tick < world.current_tick()) {
+            ++next_paint;
+        }
         while (next_paint < paints.size() && paints[next_paint].tick == world.current_tick()) {
             const auto& event = paints[next_paint];
             world.paint_disc(event.position, event.radius, event.material);

@@ -1553,7 +1553,14 @@ void test_raycast_and_line_of_sight() {
           "raycast did not report the aimed-at wall's material");
 
     const auto out_of_bounds = world.raycast({-5, 5}, {10, 5});
-    check(!out_of_bounds.blocked, "out-of-bounds origin should return a safe default, not a block");
+    check(out_of_bounds.blocked, "out-of-bounds origin must report blocked, not a clear line");
+    check(out_of_bounds.position == meat2d::Vec2i{-5, 5},
+          "out-of-bounds origin raycast should report the offending endpoint");
+
+    const auto oob_target = world.raycast({10, 5}, {200, 5});
+    check(oob_target.blocked, "out-of-bounds target must report blocked, not a clear line");
+    check(!world.line_of_sight({-5, 5}, {10, 5}),
+          "line_of_sight through an out-of-bounds endpoint must be false");
 }
 
 void test_projectile_system_destroys_terrain() {
@@ -1728,6 +1735,48 @@ void test_replay_round_trip_and_divergence() {
     check(diverged.actual_hash == original_hash, "divergence reported the wrong actual hash");
 }
 
+void test_replay_decode_sorts_out_of_order_paint_events() {
+    meat2d::WorldConfig config{
+        .width = 48,
+        .height = 48,
+        .seed = 7,
+        .sleep_after_ticks = 30,
+    };
+
+    // Reference run: two paints at ticks 2 and 5, checkpoint at the end.
+    meat2d::World world(config);
+    meat2d::replay::ReplayLog log(config);
+    constexpr meat2d::Tick total_ticks = 12;
+    for (meat2d::Tick tick = 0; tick < total_ticks; ++tick) {
+        if (world.current_tick() == 2) {
+            world.paint_disc({12, 4}, 2, meat2d::MaterialId::Sand);
+        }
+        if (world.current_tick() == 5) {
+            world.paint_disc({30, 4}, 2, meat2d::MaterialId::Water);
+        }
+        world.step();
+    }
+
+    // Record the same events out of order (tick 5 before tick 2). Before
+    // decode() sorted by tick, the head-first consumer in play() would
+    // never reach the tick-2 event, silently drop both effects, and still
+    // return Matched.
+    log.record_paint(5, {30, 4}, 2, meat2d::MaterialId::Water);
+    log.record_paint(2, {12, 4}, 2, meat2d::MaterialId::Sand);
+    log.record_checkpoint(world.current_tick(), world.state_hash());
+
+    meat2d::replay::ReplayLog decoded;
+    check(decoded.decode(log.encode()), "out-of-order replay log failed to decode");
+    const auto events = decoded.paint_events();
+    check(events.size() == 2, "decode dropped paint events");
+    check(events[0].tick == 2 && events[1].tick == 5,
+          "decode did not sort paint events by tick");
+
+    const auto result = meat2d::replay::play(decoded, total_ticks);
+    check(result.outcome == meat2d::replay::ReplayOutcome::Matched,
+          "sorted replay did not reproduce the reference run");
+}
+
 void test_chunk_store_persistence_across_worlds() {
     const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto directory = std::filesystem::temp_directory_path() / ("meat2d-chunkstore-" + unique);
@@ -1766,6 +1815,19 @@ void test_chunk_store_persistence_across_worlds() {
     });
     const auto loaded = store.load_all(restored);
     check(loaded == saved, "load_all did not load every saved chunk");
+
+    // The disk path must normalize updated_epoch on load exactly like the
+    // netcode decode path does; a stale saved epoch equal to the current
+    // tick would make update_cell silently skip the restored cell.
+    bool epochs_normalized = true;
+    for (const auto& chunk : restored.chunks()) {
+        for (const auto& cell : chunk.cells) {
+            if (cell.updated_epoch != 0) {
+                epochs_normalized = false;
+            }
+        }
+    }
+    check(epochs_normalized, "load_chunk_cells did not normalize updated_epoch");
 
     // state_hash() folds in current_tick(), which legitimately differs here
     // (source has stepped 30 times, restored has stepped 0) — chunk_hash()
@@ -1964,6 +2026,7 @@ int main() {
         test_projectile_expires_without_impact();
         test_projectile_leaves_world_without_impact();
         test_replay_round_trip_and_divergence();
+        test_replay_decode_sorts_out_of_order_paint_events();
         test_chunk_store_persistence_across_worlds();
         test_parallel_step_deterministic_across_thread_counts();
         test_parallel_step_reproducible_across_runs();
