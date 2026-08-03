@@ -724,6 +724,34 @@ std::uint64_t Scene::state_hash() const noexcept {
     return hash;
 }
 
+std::vector<SceneDifference> Scene::diff(const Scene& target) const {
+    std::vector<SceneDifference> differences;
+    for (const auto& entity : entities_) {
+        const auto* target_entity = target.find(entity.id);
+        if (target_entity == nullptr) {
+            differences.push_back(
+                {.type = SceneDifferenceType::Removed, .entity = entity.id});
+        } else if (entity != *target_entity) {
+            differences.push_back(
+                {.type = SceneDifferenceType::Changed, .entity = entity.id});
+        }
+    }
+    for (const auto& entity : target.entities_) {
+        if (find(entity.id) == nullptr) {
+            differences.push_back(
+                {.type = SceneDifferenceType::Added, .entity = entity.id});
+        }
+    }
+    std::sort(differences.begin(), differences.end(), [](const SceneDifference& lhs,
+                                                        const SceneDifference& rhs) {
+        if (lhs.entity != rhs.entity) {
+            return lhs.entity < rhs.entity;
+        }
+        return static_cast<std::uint8_t>(lhs.type) < static_cast<std::uint8_t>(rhs.type);
+    });
+    return differences;
+}
+
 std::vector<std::uint8_t> Scene::serialize() const {
     if (name_.size() > maximum_text_bytes || entities_.size() > maximum_entities ||
         entities_.size() > std::numeric_limits<std::uint32_t>::max()) {

@@ -84,6 +84,7 @@ Status: **in progress**
 - [x] Explicit gameplay-group aliases and stable sprite render-layer queries.
 - [x] Named scene registry/stack with deterministic replace, push, and pop flow.
 - [x] Bounded snapshot-backed scene undo/redo with branch invalidation.
+- [x] Deterministic entity-level scene diffs for editor and replication seams.
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.

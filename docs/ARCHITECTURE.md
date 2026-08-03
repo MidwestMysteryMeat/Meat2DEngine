@@ -71,6 +71,10 @@ uses the scene document itself as the checkpoint contract, so hierarchy,
 components, groups, and render-layer data cannot acquire a separate undo
 representation with different serialization semantics.
 
+`Scene::diff(target)` compares stable entity IDs and returns sorted added,
+removed, and changed records. The comparison is entity-content-only and does
+not treat scene names or transient event history as gameplay entity changes.
+
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.
 `meat2d::render::Camera2D` uses integer viewport, zoom, and world/screen

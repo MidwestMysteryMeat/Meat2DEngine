@@ -130,6 +130,33 @@ void test_scene_history_undo_redo() {
           "scene history could not establish a new baseline");
 }
 
+void test_scene_diffs() {
+    meat2d::scene::Scene base("base");
+    const auto unchanged = base.create_entity("Unchanged");
+    const auto changed = base.create_entity("Changed");
+    const auto removed = base.create_entity("Removed");
+    (void)base.add_transform(changed, {.position = {1, 2}});
+
+    meat2d::scene::Scene target = base;
+    target.find(changed)->name = "Changed Target";
+    target.destroy_entity(removed);
+    const auto added = target.create_entity("Added");
+    check(unchanged != meat2d::scene::invalid_entity && added > removed,
+          "scene diff fixture could not establish stable IDs");
+    const auto differences = base.diff(target);
+    check(differences.size() == 3U && differences[0] == meat2d::scene::SceneDifference{
+                                             .type = meat2d::scene::SceneDifferenceType::Changed,
+                                             .entity = changed} &&
+              differences[1] == meat2d::scene::SceneDifference{
+                                     .type = meat2d::scene::SceneDifferenceType::Removed,
+                                     .entity = removed} &&
+              differences[2] == meat2d::scene::SceneDifference{
+                                     .type = meat2d::scene::SceneDifferenceType::Added,
+                                     .entity = added},
+          "scene diff did not report stable added/removed/changed entities");
+    check(target.diff(target).empty(), "scene diff reported changes for an identical scene");
+}
+
 void test_scene_entity_components_and_hashing() {
     using meat2d::scene::Collider;
     using meat2d::scene::ColliderShape;
@@ -2573,6 +2600,7 @@ int main() {
         test_fixed_timestep_accumulator();
         test_scene_stack_transitions();
         test_scene_history_undo_redo();
+        test_scene_diffs();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
         test_tile_map_content_and_serialization();

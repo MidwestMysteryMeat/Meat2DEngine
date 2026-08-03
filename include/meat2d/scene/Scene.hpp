@@ -28,6 +28,15 @@ enum class SceneEventType : std::uint8_t {
 
 enum class SceneComponent : std::uint8_t { Transform, Sprite, Collider, RigidBody };
 
+enum class SceneDifferenceType : std::uint8_t { Added, Removed, Changed };
+
+struct SceneDifference {
+    SceneDifferenceType type{};
+    EntityId entity{};
+
+    friend constexpr bool operator==(SceneDifference, SceneDifference) = default;
+};
+
 struct SceneEvent {
     SceneEventType type{};
     EntityId entity{};
@@ -40,6 +49,8 @@ struct SceneEvent {
 struct Transform {
     Vec2i position{};
     Vec2i scale{1, 1};
+
+    friend constexpr bool operator==(Transform, Transform) = default;
 };
 
 struct Sprite {
@@ -47,6 +58,8 @@ struct Sprite {
     RectI source{};
     std::int16_t layer{};
     bool visible{true};
+
+    friend constexpr bool operator==(Sprite, Sprite) = default;
 };
 
 enum class ColliderShape : std::uint8_t { Box, Circle };
@@ -58,6 +71,8 @@ struct Collider {
     bool sensor{};
     std::uint16_t category_bits{1};
     std::uint16_t mask_bits{0xFFFF};
+
+    friend constexpr bool operator==(Collider, Collider) = default;
 };
 
 struct RigidBody {
@@ -66,6 +81,8 @@ struct RigidBody {
     Vec2i max_velocity{32, 32};
     bool dynamic{true};
     bool affected_by_gravity{true};
+
+    friend constexpr bool operator==(RigidBody, RigidBody) = default;
 };
 
 // A scene entity is intentionally small and data-oriented at this stage. The
@@ -81,6 +98,8 @@ struct Entity {
     std::optional<Sprite> sprite;
     std::optional<Collider> collider;
     std::optional<RigidBody> rigid_body;
+
+    friend bool operator==(const Entity&, const Entity&) = default;
 };
 
 class Scene {
@@ -152,6 +171,11 @@ class Scene {
     // not hash object addresses or structure padding, so equivalent scenes
     // created independently produce the same result.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
+
+    // Returns entity-level changes needed to move this scene toward target.
+    // Results are sorted by stable entity ID; metadata such as scene name is
+    // intentionally outside this entity-content diff.
+    [[nodiscard]] std::vector<SceneDifference> diff(const Scene& target) const;
 
     // Encodes a versioned, little-endian scene document. The format is kept
     // independent from the network protocol so editor files can evolve on a
