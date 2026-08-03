@@ -20,6 +20,7 @@
 #include "meat2d/scene/Physics.hpp"
 #include "meat2d/scene/Scene.hpp"
 #include "meat2d/scene/SceneHistory.hpp"
+#include "meat2d/scene/SceneSnapshot.hpp"
 #include "meat2d/scene/SceneStack.hpp"
 #include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Projectile.hpp"
@@ -155,6 +156,43 @@ void test_scene_diffs() {
                                      .entity = added},
           "scene diff did not report stable added/removed/changed entities");
     check(target.diff(target).empty(), "scene diff reported changes for an identical scene");
+}
+
+void test_scene_snapshots() {
+    meat2d::scene::Scene source("snapshot");
+    const auto actor = source.create_entity("Actor");
+    (void)source.add_transform(actor, {.position = {12, 24}});
+    const auto snapshot = meat2d::scene::capture_snapshot(source);
+    check(snapshot && snapshot->state_hash == source.state_hash() && !snapshot->bytes.empty(),
+          "scene snapshot capture did not preserve a bounded document and hash");
+    if (!snapshot) {
+        return;
+    }
+    const auto decoded = meat2d::scene::decode_snapshot(*snapshot);
+    check(decoded && decoded->state_hash() == source.state_hash(),
+          "scene snapshot could not decode its validated scene");
+
+    auto tampered_hash = *snapshot;
+    ++tampered_hash.state_hash;
+    check(!meat2d::scene::decode_snapshot(tampered_hash),
+          "scene snapshot accepted a mismatched integrity hash");
+    auto tampered_bytes = *snapshot;
+    tampered_bytes.bytes.back() ^= 0x01U;
+    check(!meat2d::scene::decode_snapshot(tampered_bytes),
+          "scene snapshot accepted tampered serialized bytes");
+
+    meat2d::scene::Scene target("target");
+    const auto before_restore = target.state_hash();
+    check(!meat2d::scene::restore_snapshot(target, tampered_hash) &&
+              target.state_hash() == before_restore &&
+              meat2d::scene::restore_snapshot(target, *snapshot) &&
+              target.state_hash() == source.state_hash(),
+          "scene snapshot restore was not atomic on validation failure");
+    check(!meat2d::scene::capture_snapshot(source, snapshot->bytes.size() - 1U).has_value() &&
+              !meat2d::scene::capture_snapshot(source,
+                                                meat2d::scene::maximum_scene_snapshot_bytes + 1U)
+                   .has_value(),
+          "scene snapshot size bounds were not enforced");
 }
 
 void test_scene_entity_components_and_hashing() {
@@ -2603,6 +2641,7 @@ int main() {
         test_scene_stack_transitions();
         test_scene_history_undo_redo();
         test_scene_diffs();
+        test_scene_snapshots();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
         test_tile_map_content_and_serialization();

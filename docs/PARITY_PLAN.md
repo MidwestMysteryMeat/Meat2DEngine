@@ -85,10 +85,11 @@ Status: **in progress**
 - [x] Named scene registry/stack with deterministic replace, push, and pop flow.
 - [x] Bounded snapshot-backed scene undo/redo with branch invalidation.
 - [x] Deterministic entity-level scene diffs for editor and replication seams.
+- [x] Bounded hash-checked scene snapshots for autosave, prefabs, and transport.
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
-- [ ] Editor-managed prefab overrides and scene diffs.
+- [ ] Editor-managed prefab overrides.
 - [x] Fixed simulation tick accumulator with interpolated rendering contract.
 - [ ] Deterministic serialization for all networked components.
 
@@ -124,7 +125,8 @@ Status: planned
 - [ ] Scene tree and visual viewport.
 - [ ] Component inspector and property editing.
 - [ ] Drag-and-drop asset import and terrain/tilemap painting.
-- [ ] Prefabs, overrides, undo/redo, autosave, and scene diffs.
+- [ ] Prefabs and overrides.
+- [x] Undo/redo, bounded autosave snapshots, and deterministic scene diffs.
 - [ ] Collision-shape and animation editors.
 - [ ] Play-in-editor, hot reload, and live network-session testing.
 

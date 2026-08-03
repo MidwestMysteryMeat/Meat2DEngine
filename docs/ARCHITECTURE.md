@@ -75,6 +75,11 @@ representation with different serialization semantics.
 removed, and changed records. The comparison is entity-content-only and does
 not treat scene names or transient event history as gameplay entity changes.
 
+`capture_snapshot()` and `decode_snapshot()` add a bounded, hash-checked
+document boundary around scene serialization. Editor autosave, prefab storage,
+and future fragmented entity replication can share this validation without
+accepting unbounded or tampered scene payloads.
+
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.
 `meat2d::render::Camera2D` uses integer viewport, zoom, and world/screen
