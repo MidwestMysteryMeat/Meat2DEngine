@@ -133,6 +133,11 @@ image dimensions, resolves frame indices into source rectangles, bounds the
 catalog, and hashes entries by asset ID. Backends can use that catalog to own
 GPU texture handles separately from deterministic scene and asset metadata.
 
+`meat2d::tools::SceneEditor` is the backend-neutral editor model. It provides
+viewport hit-testing, stable topmost selection, scene-tree child queries,
+validated overrides, and snapshot-backed undo/redo so an ImGui or other editor
+front end does not implement a second scene mutation path.
+
 ## Cellular world
 
 The world is divided into 64×64 chunks. A chunk currently stores 4,096

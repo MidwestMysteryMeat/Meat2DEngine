@@ -139,10 +139,12 @@ add_library(
     src/tools/Process.cpp
     src/tools/ProjectBrowser.cpp
     src/tools/ProjectManager.cpp
+    src/tools/SceneEditor.cpp
 )
 add_library(Meat2D::Tools ALIAS meat2d_tools)
 set_target_properties(meat2d_tools PROPERTIES EXPORT_NAME Tools)
 target_compile_features(meat2d_tools PUBLIC cxx_std_20)
+target_link_libraries(meat2d_tools PUBLIC Meat2D::Render)
 target_include_directories(
     meat2d_tools
     PUBLIC

@@ -131,7 +131,9 @@ collision, audio, UI, and particles using public Meat2D APIs.
 
 Status: planned
 
-- [ ] Scene tree and visual viewport.
+- [ ] Scene tree and visual viewport UI.
+- [x] Backend-neutral editor model with deterministic selection, hierarchy
+      queries, override application, and undo/redo.
 - [ ] Component inspector and property editing.
 - [ ] Drag-and-drop asset import and terrain/tilemap painting.
 - [x] Prefab/template subtree instantiation and editor-managed overrides.

@@ -30,6 +30,7 @@
 #include "meat2d/sim/World.hpp"
 #include "meat2d/tools/ProjectBrowser.hpp"
 #include "meat2d/tools/ProjectManager.hpp"
+#include "meat2d/tools/SceneEditor.hpp"
 
 #include <algorithm>
 #include <array>
@@ -703,6 +704,37 @@ void test_sprite_batch() {
     meat2d::render::SpriteBatch bounded(1);
     check(!bounded.build(scene, camera, false) && bounded.commands().empty(),
           "sprite batch exceeded its command budget or partially replaced commands");
+}
+
+void test_scene_editor_model() {
+    meat2d::scene::Scene initial("editor");
+    const auto parent = initial.create_entity("Parent");
+    const auto back = initial.create_entity("Back");
+    const auto front = initial.create_entity("Front");
+    check(initial.add_transform(parent, {.position = {10, 10}}) != nullptr &&
+              initial.add_transform(back, {.position = {0, 0}}) != nullptr &&
+              initial.add_sprite(back, {.asset_id = 1, .source = {0, 0, 16, 16}, .layer = 1}) !=
+                  nullptr &&
+              initial.add_transform(front, {.position = {0, 0}}) != nullptr &&
+              initial.add_sprite(front, {.asset_id = 2, .source = {0, 0, 16, 16}, .layer = 2}) !=
+                  nullptr &&
+              initial.set_parent(back, parent) && initial.set_parent(front, parent),
+          "scene editor fixture could not be prepared");
+    meat2d::tools::SceneEditor editor(initial, 4);
+    editor.camera().set_center({18, 18});
+    editor.camera().set_viewport({40, 40});
+    check(editor.children_of(parent).size() == 2U && editor.select_at({12, 12}) &&
+              editor.selected() == front,
+          "scene editor did not select the deterministic topmost viewport entity");
+    meat2d::scene::SceneOverride rename{};
+    rename.entity = front;
+    rename.name = "Selected Front";
+    check(editor.apply_override(rename) && editor.scene().find(front)->name == "Selected Front" &&
+              editor.history().undo_count() == 1U && editor.undo() &&
+              editor.scene().find(front)->name == "Front" && editor.redo() &&
+              editor.scene().find(front)->name == "Selected Front" && editor.selected() == front,
+          "scene editor override history did not undo and redo selection edits");
+    check(!editor.select(999U), "scene editor selected an unknown entity");
 }
 
 void test_input_state_and_action_map() {
@@ -2856,6 +2888,7 @@ int main() {
         test_rigid_body_step_and_particles();
         test_collision_layers_and_debug_draw();
         test_sprite_batch();
+        test_scene_editor_model();
         test_input_state_and_action_map();
         test_camera_transforms_and_clamping();
         test_animation_playback_and_camera_source();
