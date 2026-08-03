@@ -14,6 +14,21 @@ ctest --preset headless
 
 Run the `dev` preset when changing the SDL client.
 
+For memory diagnostics, use the Clang or GCC AddressSanitizer preset:
+
+```bash
+cmake --preset asan-headless
+cmake --build --preset asan-headless
+ctest --preset asan-headless
+```
+
+The headless preset disables SDL-dependent examples and the graphical client.
+This keeps server, test, benchmark, replay, and SDK validation usable on build
+machines without a graphics toolchain.
+
+The repository's parity roadmap and acceptance gates are tracked in
+[`docs/PARITY_PLAN.md`](docs/PARITY_PLAN.md).
+
 ## Core rules
 
 - Authoritative state uses deterministic integer or fixed-point values.

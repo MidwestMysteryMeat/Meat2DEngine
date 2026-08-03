@@ -29,9 +29,19 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "MEAT2D_BUILD_CLIENT": "OFF",
         "MEAT2D_BUILD_LAUNCHER": "OFF",
+        "MEAT2D_BUILD_EXAMPLES": "OFF",
         "MEAT2D_BUILD_SERVER": "ON",
         "MEAT2D_BUILD_TESTS": "ON",
         "MEAT2D_BUILD_BENCHMARKS": "ON"
+      }
+    },
+    {
+      "name": "asan-headless",
+      "displayName": "AddressSanitizer Headless Debug",
+      "inherits": "headless",
+      "binaryDir": "${sourceDir}/build/asan-headless",
+      "cacheVariables": {
+        "MEAT2D_SANITIZER": "address"
       }
     },
     {
@@ -58,6 +68,10 @@
       "configurePreset": "headless"
     },
     {
+      "name": "asan-headless",
+      "configurePreset": "asan-headless"
+    },
+    {
       "name": "release",
       "configurePreset": "release"
     }
@@ -73,6 +87,13 @@
     {
       "name": "headless",
       "configurePreset": "headless",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "asan-headless",
+      "configurePreset": "asan-headless",
       "output": {
         "outputOnFailure": true
       }

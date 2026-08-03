@@ -1,12 +1,14 @@
 # Meat2D Engine
 
-Meat2D is a small, simulation-first C++20 engine for destructible 2D worlds.
-Its target space sits between falling-sand games, Terraria-like sandboxes,
-Worms-like terrain destruction, and multiplayer side-view or top-down shooters.
+Meat2D is a C++20 2D game engine for side-scrollers, top-down games,
+metroidvanias, shooters, sandboxes, and destructible-terrain games. Its
+deterministic cellular simulation is an optional gameplay system and a strong
+foundation for falling-sand and terrain-destruction projects, not a restriction
+on the kinds of games the engine can create.
 
 The project is intentionally early. Its first working slice combines a
-deterministic living laboratory, authoritative multiplayer, a graphical
-project editor, starter games, and one-command packaging.
+deterministic world runtime, authoritative multiplayer, a graphical project
+editor, selectable game-type starters, and one-command packaging.
 
 | Interactive sandbox (elements lab) | `examples/deep_dig` |
 | --- | --- |
@@ -47,11 +49,21 @@ project editor, starter games, and one-command packaging.
 - Self-hostable `meat2d_directory` service; gameplay remains peer-to-server
 - Installable `Meat2D::Core`, `Meat2D::Net`, and `Meat2D::Tools` CMake
   targets and CPack SDK archives
+- General scene runtime with stable entity IDs, transform/sprite/collider
+  components, deterministic hashing, and versioned scene serialization
+- Backend-neutral keyboard/mouse input state, action bindings, integer camera
+  transforms, scene collider queries, fixed-tick sprite animation, and
+  deterministic kinematic movement
+- Initial rigid-body component/stepper with gravity, acceleration, velocity
+  limits, collision response, category/mask filtering, and deterministic
+  particle simulation
+- Renderer-neutral bounded debug draw commands for lines, rectangles, circles,
+  and text
 - Graphical project editor with guarded code/config editing, native asset
   import, external-change detection, PNG/JPEG preview, sprite-sheet grids, and
   animation metadata
-- Side-view/top-down starters plus background build, test, package, and
-  GitHub publishing actions
+- Side-scroller, top-down, metroidvania, and falling-sand starters plus
+  background build, test, package, and GitHub publishing actions
 - Editor-hosted test sessions with one-click local hosting and direct, LAN, or
   public-directory joins
 
@@ -302,8 +314,10 @@ cmake/           installed-package configuration
 docs/            architecture and roadmap
 examples/        deep_dig, a complete example game built on the public API
 include/meat2d/  public engine API
-src/             engine implementation
-templates/       side-view and top-down game starters
+src/             engine implementation, including scene, input, and camera
+                 runtime systems
+templates/       selectable side-scroller, top-down, metroidvania, and
+                 falling-sand game starters
 tests/           unit and determinism tests
 ```
 

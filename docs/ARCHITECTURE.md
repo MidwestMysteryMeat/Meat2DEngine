@@ -10,8 +10,8 @@ Meat2D is designed around four constraints:
    size.
 4. A new game should consume the engine without copying its source tree.
 
-The renderer, AI, networking, and game rules are consumers of the simulation
-core. They do not own authoritative cells.
+The renderer, AI, networking, game rules, and ordinary scene entities are
+consumers of the engine core. They do not own authoritative cellular state.
 
 ## State flow
 
@@ -28,6 +28,44 @@ material reactions ──────┘             │
 
 Commands will be ordered by tick, player, and sequence before application.
 That ordering is part of the determinism contract.
+
+## Game scenes
+
+Ordinary game actors live in `meat2d::scene::Scene`, separate from the cellular
+`World`. A scene currently provides stable non-reused entity IDs plus optional
+transform, sprite, and collider components. This lets side-scrollers,
+top-down games, and metroidvanias share a gameplay substrate without requiring
+cellular materials to be their primary mechanic.
+
+Scene documents use a versioned little-endian `M2SC` format and are independent
+of the network packet protocol. `Scene::state_hash()` hashes serialized field
+values rather than addresses or structure padding, providing a deterministic
+baseline for future editor, save, and replication work.
+
+Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
+keyboard and mouse state independent of SDL or any other platform backend.
+`meat2d::render::Camera2D` uses integer viewport, zoom, and world/screen
+transforms. Scene collider queries use transformed axis-aligned bounds and can
+include or exclude sensor colliders.
+
+`meat2d::assets::SpriteAnimator` advances sprite-sheet animations from integer
+simulation ticks and supports looping and non-looping clips. The scene layer
+also provides deterministic axis-separated kinematic movement with swept
+one-cell steps, so ordinary actors cannot tunnel through solid colliders when a
+large movement delta is submitted.
+
+`RigidBody` builds on that primitive with integer velocity, acceleration,
+gravity, velocity limits, and collision response. `step_rigid_bodies()` is a
+deliberately small deterministic solver for ordinary actors; joints, impulses,
+rotational dynamics, and a full rigid-body backend remain separate future work.
+Colliders expose category and mask bits so actors, terrain, projectiles, and
+sensors can selectively interact.
+`ParticleSystem` provides bounded fixed-tick visual effects without introducing
+floating-point state into the core simulation.
+
+`DebugDrawList` records bounded line, rectangle, circle, and text commands. It
+is intentionally renderer-neutral so the SDL client, launcher, and headless
+diagnostics can choose their own visualization backend.
 
 ## Cellular world
 

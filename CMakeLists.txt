@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(
     Meat2DEngine
     VERSION 0.4.0
-    DESCRIPTION "Deterministic simulation-first 2D engine"
+    DESCRIPTION "C++20 2D game engine with deterministic simulation and multiplayer"
     LANGUAGES CXX
 )
 
@@ -23,15 +23,34 @@ option(MEAT2D_BUILD_BENCHMARKS "Build simulation benchmarks" ON)
 option(MEAT2D_ENABLE_INSTALL "Enable SDK/runtime installation and CPack" ON)
 option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
+set(MEAT2D_SANITIZER "" CACHE STRING "Sanitizer to enable: address, undefined, or thread")
+set_property(CACHE MEAT2D_SANITIZER PROPERTY STRINGS "" address undefined thread)
+
+if(MEAT2D_SANITIZER)
+    if(MSVC)
+        message(FATAL_ERROR "MEAT2D_SANITIZER requires a Clang or GCC toolchain")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "MEAT2D_SANITIZER requires GCC, Clang, or AppleClang")
+    endif()
+    if(NOT MEAT2D_SANITIZER MATCHES "^(address|undefined|thread)$")
+        message(FATAL_ERROR "MEAT2D_SANITIZER must be empty, address, undefined, or thread")
+    endif()
+endif()
+
 set(MEAT2D_RUNTIME_TARGETS)
 
 add_library(
     meat2d_core
     STATIC
+    src/assets/Animation.cpp
     src/assets/SpriteSheet.cpp
     src/ai/LivingSimulation.cpp
+    src/input/Input.cpp
     src/life/OrganismField.cpp
     src/replay/Replay.cpp
+    src/scene/Scene.cpp
+    src/scene/Physics.cpp
     src/sim/ChunkStore.cpp
     src/sim/Material.cpp
     src/sim/Projectile.cpp
@@ -72,6 +91,9 @@ endif()
 add_library(
     meat2d_render
     STATIC
+    src/render/Camera.cpp
+    src/render/DebugDraw.cpp
+    src/render/Particles.cpp
     src/render/WorldView.cpp
 )
 add_library(Meat2D::Render ALIAS meat2d_render)
@@ -351,6 +373,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
     target_compile_features(meat2d_tests PRIVATE cxx_std_20)
     target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
+    set_tests_properties(meat2d_tests PROPERTIES TIMEOUT 120)
 endif()
 
 if(MEAT2D_BUILD_BENCHMARKS)
@@ -358,6 +381,45 @@ if(MEAT2D_BUILD_BENCHMARKS)
     target_compile_features(meat2d_benchmark PRIVATE cxx_std_20)
     target_link_libraries(meat2d_benchmark PRIVATE Meat2D::Core)
     list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_benchmark)
+endif()
+
+# Keep sanitizer flags scoped to Meat2D targets so fetched third-party projects
+# are not rebuilt with the engine's diagnostic configuration.
+if(MEAT2D_SANITIZER)
+    foreach(candidate IN ITEMS
+        meat2d_core
+        meat2d_render
+        meat2d_tools
+        meat2d_net
+        meat2d_imgui
+        meat2d_sandbox
+        meat2d_example_deep_dig
+        meat2d_launcher
+        meat2d_server
+        meat2d_remote
+        meat2d_directory
+        meat2d_replay
+        meat2d_cli
+        meat2d_tests
+        meat2d_benchmark
+    )
+        if(TARGET ${candidate})
+            target_compile_options(
+                ${candidate}
+                PRIVATE
+                    -fsanitize=${MEAT2D_SANITIZER}
+                    -fno-omit-frame-pointer
+            )
+            get_target_property(candidate_type ${candidate} TYPE)
+            if(NOT candidate_type STREQUAL "STATIC_LIBRARY")
+                target_link_options(
+                    ${candidate}
+                    PRIVATE
+                        -fsanitize=${MEAT2D_SANITIZER}
+                )
+            endif()
+        endif()
+    endforeach()
 endif()
 
 if(MINGW)

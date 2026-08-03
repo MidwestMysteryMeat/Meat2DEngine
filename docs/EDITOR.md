@@ -13,10 +13,12 @@ Launch the editor:
 meat2d_launcher
 ```
 
-The welcome screen can create either starter:
+The welcome screen lets you choose a game-type starter:
 
-- side scroller, with platform movement and paintable simulation;
-- top-down shooter, with four-direction movement and a simulation arena.
+- side-scroller, with platform movement and paintable simulation;
+- top-down, with four-direction movement and a simulation arena;
+- metroidvania, with side-view traversal and platform layout;
+- falling-sand, with the focused deterministic elements laboratory.
 
 Native folder dialogs are available, while every path remains directly
 editable for keyboard-focused workflows. A generated project can also be
@@ -154,6 +156,9 @@ The same workflow is scriptable:
 
 ```bash
 meat2d new "My Game" --template side
+meat2d new "My Game" --template top
+meat2d new "My Game" --template metroidvania
+meat2d new "My Game" --template falling-sand
 meat2d build my-game
 meat2d run my-game
 meat2d package my-game

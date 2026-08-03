@@ -1061,7 +1061,8 @@ void draw_start(EditorState& state, SDL_Window* window) {
     ImGui::SameLine();
     ImGui::TextDisabled("%s", meat2d::version_string.data());
     ImGui::SeparatorText("Create a game");
-    ImGui::TextWrapped("Start from a simulation-ready side-view or top-down C++ project.");
+    ImGui::TextWrapped(
+        "Choose a C++ starter for a side-scroller, top-down game, metroidvania, or falling-sand project.");
     ImGui::InputText("Project name", &state.new_name);
     ImGui::SetNextItemWidth(-90.0F);
     ImGui::InputText("Destination", &state.new_directory);
@@ -1069,15 +1070,19 @@ void draw_start(EditorState& state, SDL_Window* window) {
     if (ImGui::Button("Browse##new")) {
         SDL_ShowOpenFolderDialog(new_project_folder_callback, nullptr, window, nullptr, false);
     }
-    const char* templates[] = {"Side scroller", "Top-down shooter"};
-    ImGui::Combo("Starter", &state.new_template, templates, 2);
+    const char* templates[] = {"Side scroller", "Top-down game", "Metroidvania", "Falling sand"};
+    ImGui::Combo("Game type", &state.new_template, templates, 4);
     if (ImGui::Button("Create and open", {160.0F, 0.0F})) {
         const auto result = state.manager.create_project({
             .name = state.new_name,
             .directory = state.new_directory,
             .project_template = state.new_template == 0
                                     ? meat2d::tools::ProjectTemplate::SideScroller
-                                    : meat2d::tools::ProjectTemplate::TopDown,
+                                    : state.new_template == 1
+                                          ? meat2d::tools::ProjectTemplate::TopDown
+                                          : state.new_template == 2
+                                                ? meat2d::tools::ProjectTemplate::Metroidvania
+                                                : meat2d::tools::ProjectTemplate::FallingSand,
             .engine_git_tag = "main",
         });
         state.status = result.summary + (result.details.empty() ? "" : ": " + result.details);

@@ -1,5 +1,7 @@
 #include "meat2d/ai/LivingSimulation.hpp"
+#include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
+#include "meat2d/input/Input.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
 #include "meat2d/net/Discovery.hpp"
 #include "meat2d/net/Fragmentation.hpp"
@@ -9,6 +11,12 @@
 #include "meat2d/net/Session.hpp"
 #include "meat2d/net/UdpSocket.hpp"
 #include "meat2d/replay/Replay.hpp"
+#include "meat2d/render/Camera.hpp"
+#include "meat2d/render/DebugDraw.hpp"
+#include "meat2d/render/Particles.hpp"
+#include "meat2d/render/WorldView.hpp"
+#include "meat2d/scene/Physics.hpp"
+#include "meat2d/scene/Scene.hpp"
 #include "meat2d/sim/ChunkStore.hpp"
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
@@ -47,6 +55,362 @@ void test_cell_layout_and_protocol() {
           "authoritative organism cell must remain eight bytes");
     check(sizeof(meat2d::net::PacketHeader) == 28, "network header layout unexpectedly changed");
     check(meat2d::net::maximum_players == 8, "first multiplayer target must remain eight players");
+}
+
+void test_scene_entity_components_and_hashing() {
+    using meat2d::scene::Collider;
+    using meat2d::scene::ColliderShape;
+    using meat2d::scene::Scene;
+    using meat2d::scene::Sprite;
+    using meat2d::scene::Transform;
+
+    Scene first("cavern");
+    const auto player = first.create_entity("Player");
+    const auto door = first.create_entity("Door");
+    check(player != meat2d::scene::invalid_entity && door != meat2d::scene::invalid_entity,
+          "scene did not allocate entity IDs");
+    check(first.entities().size() == 2U && first.contains(player),
+          "scene did not retain created entities");
+    check(first.add_transform(player, Transform{.position = {12, 24}, .scale = {1, 1}}) != nullptr,
+          "scene rejected a valid transform component");
+    check(first.add_sprite(player,
+                           Sprite{
+                               .asset_id = 7,
+                               .source = {0, 0, 16, 16},
+                               .layer = 2,
+                           }) != nullptr,
+          "scene rejected a valid sprite component");
+    check(first.add_collider(door,
+                             Collider{
+                                 .shape = ColliderShape::Box,
+                                 .bounds = {32, 16, 16, 32},
+                                 .sensor = true,
+                                 .category_bits = 2,
+                                 .mask_bits = 3,
+                             }) != nullptr,
+          "scene rejected a valid collider component");
+    check(first.add_rigid_body(player,
+                               {
+                                   .velocity = {1, 2},
+                                   .acceleration = {0, 1},
+                                   .max_velocity = {8, 8},
+                               }) != nullptr,
+          "scene rejected a valid rigid-body component");
+    check(first.add_transform(999U) == nullptr, "scene accepted a component for an unknown entity");
+
+    Scene second("cavern");
+    const auto second_player = second.create_entity("Player");
+    const auto second_door = second.create_entity("Door");
+    check(second.add_transform(second_player,
+                               Transform{.position = {12, 24}, .scale = {1, 1}}) != nullptr,
+          "equivalent scene rejected its transform component");
+    check(second.add_sprite(second_player,
+                            Sprite{
+                                .asset_id = 7,
+                                .source = {0, 0, 16, 16},
+                                .layer = 2,
+                            }) != nullptr,
+          "equivalent scene rejected its sprite component");
+    check(second.add_collider(second_door,
+                              Collider{
+                                  .shape = ColliderShape::Box,
+                                  .bounds = {32, 16, 16, 32},
+                                  .sensor = true,
+                                  .category_bits = 2,
+                                  .mask_bits = 3,
+                              }) != nullptr,
+          "equivalent scene rejected its collider component");
+    check(second.add_rigid_body(second_player,
+                                {
+                                    .velocity = {1, 2},
+                                    .acceleration = {0, 1},
+                                    .max_velocity = {8, 8},
+                                }) != nullptr,
+          "equivalent scene rejected its rigid-body component");
+    check(first.state_hash() == second.state_hash(),
+          "equivalent scenes produced different deterministic hashes");
+
+    const auto encoded = first.serialize();
+    const auto decoded = meat2d::scene::Scene::deserialize(encoded);
+    check(decoded.has_value() && decoded->name() == "cavern" &&
+              decoded->state_hash() == first.state_hash(),
+          "scene did not survive a serialize/deserialize round trip");
+    auto truncated = encoded;
+    truncated.pop_back();
+    check(!meat2d::scene::Scene::deserialize(truncated).has_value(),
+          "truncated scene data was accepted");
+    auto bad_magic = encoded;
+    bad_magic[0] = 'X';
+    check(!meat2d::scene::Scene::deserialize(bad_magic).has_value(),
+          "scene data with an invalid magic was accepted");
+
+    check(first.remove_sprite(player), "scene could not remove an existing component");
+    check(first.state_hash() != second.state_hash(),
+          "scene hash did not change after component mutation");
+    check(first.destroy_entity(player) && !first.contains(player),
+          "scene did not destroy an existing entity");
+    const auto replacement = first.create_entity("Replacement");
+    check(replacement > player, "scene reused a destroyed entity ID");
+    check(!first.destroy_entity(player) && !first.remove_collider(player),
+          "scene reported success for a missing entity");
+
+    first.clear();
+    check(first.entities().empty() && first.create_entity("Fresh") == 1U,
+          "scene clear did not reset its lifecycle state");
+}
+
+void test_scene_collision_queries() {
+    meat2d::scene::Scene scene("collision");
+    const auto solid = scene.create_entity("Solid");
+    const auto sensor = scene.create_entity("Sensor");
+    check(scene.add_transform(solid, {.position = {10, 20}}) != nullptr,
+          "scene rejected the solid transform");
+    check(scene.add_collider(solid, {.bounds = {0, 0, 8, 8}}) != nullptr,
+          "scene rejected the solid collider");
+    check(scene.add_transform(sensor, {.position = {40, 20}}) != nullptr,
+          "scene rejected the sensor transform");
+    check(scene.add_collider(sensor,
+                             {
+                                 .bounds = {0, 0, 8, 8},
+                                 .sensor = true,
+                             }) != nullptr,
+          "scene rejected the sensor collider");
+
+    const auto solid_bounds = scene.world_collider_bounds(solid);
+    check(solid_bounds && solid_bounds->x == 10 && solid_bounds->y == 20,
+          "scene did not transform local collider bounds into world space");
+    const auto all_hits = scene.query_colliders({5, 15, 20, 20});
+    check(all_hits.size() == 1U && all_hits.front() == solid,
+          "scene collider query returned an unexpected solid hit");
+    const auto sensor_hits = scene.query_colliders({35, 15, 20, 20});
+    check(sensor_hits.size() == 1U && sensor_hits.front() == sensor,
+          "scene collider query did not return sensor hits when requested");
+    check(scene.query_colliders({35, 15, 20, 20}, false).empty(),
+          "scene collider query did not filter sensor hits");
+    check(!scene.world_collider_bounds(999U).has_value(),
+          "scene returned collider bounds for an unknown entity");
+}
+
+void test_kinematic_scene_motion() {
+    meat2d::scene::Scene scene("movement");
+    const auto floor = scene.create_entity("Floor");
+    const auto wall = scene.create_entity("Wall");
+    const auto player = scene.create_entity("Player");
+    check(scene.add_transform(floor, {.position = {0, 20}}) != nullptr &&
+              scene.add_collider(floor, {.bounds = {0, 0, 100, 10}}) != nullptr &&
+              scene.add_transform(wall, {.position = {40, 0}}) != nullptr &&
+              scene.add_collider(wall, {.bounds = {0, 0, 10, 100}}) != nullptr &&
+              scene.add_transform(player, {.position = {10, 10}}) != nullptr &&
+              scene.add_collider(player, {.bounds = {0, 0, 8, 8}}) != nullptr,
+          "kinematic scene setup failed");
+
+    const auto falling = meat2d::scene::move_and_collide(scene, player, {0, 10});
+    check(falling.hit_vertical && falling.grounded && falling.applied.y == 2 &&
+              scene.find(player)->transform->position.y == 12,
+          "kinematic movement did not stop and ground an actor on a floor");
+    const auto walking = meat2d::scene::move_and_collide(scene, player, {10, 0});
+    check(!walking.hit_horizontal && walking.applied.x == 10 &&
+              scene.find(player)->transform->position.x == 20,
+          "kinematic movement rejected a clear horizontal step");
+    const auto blocked = meat2d::scene::move_and_collide(scene, player, {15, 0});
+    check(blocked.hit_horizontal && blocked.applied.x == 12 &&
+              scene.find(player)->transform->position.x == 32,
+          "kinematic movement passed through or stopped inside a solid wall");
+}
+
+void test_rigid_body_step_and_particles() {
+    meat2d::scene::Scene scene("rigid");
+    const auto floor = scene.create_entity("Floor");
+    const auto player = scene.create_entity("Player");
+    check(scene.add_transform(floor, {.position = {0, 20}}) != nullptr &&
+              scene.add_collider(floor, {.bounds = {0, 0, 100, 10}}) != nullptr &&
+              scene.add_transform(player, {.position = {10, 10}}) != nullptr &&
+              scene.add_collider(player, {.bounds = {0, 0, 8, 8}}) != nullptr &&
+              scene.add_rigid_body(player, {.max_velocity = {8, 8}}) != nullptr,
+          "rigid-body scene setup failed");
+    const auto first_step = meat2d::scene::step_rigid_bodies(scene);
+    check(first_step.bodies == 1U && first_step.collisions == 0U &&
+              scene.find(player)->rigid_body->velocity.y == 1,
+          "rigid-body step did not apply deterministic gravity");
+    const auto second_step = meat2d::scene::step_rigid_bodies(scene);
+    check(second_step.bodies == 1U && second_step.collisions == 1U && second_step.grounded == 1U &&
+              scene.find(player)->rigid_body->velocity.y == 0,
+          "rigid-body step did not stop and ground the actor");
+
+    meat2d::render::ParticleSystem first_particles(2);
+    meat2d::render::ParticleSystem second_particles(2);
+    const meat2d::render::ParticleConfig config{
+        .position = {2, 3},
+        .velocity = {1, 0},
+        .acceleration = {0, 1},
+        .lifetime_ticks = 5,
+        .size = 2,
+        .color = {255, 128, 64, 255},
+    };
+    check(first_particles.spawn(config) != meat2d::render::invalid_particle &&
+              second_particles.spawn(config) != meat2d::render::invalid_particle,
+          "particle system rejected a valid particle");
+    check(first_particles.spawn(config) != meat2d::render::invalid_particle &&
+              first_particles.spawn(config) == meat2d::render::invalid_particle,
+          "particle system exceeded its configured capacity");
+    check(second_particles.spawn(config) != meat2d::render::invalid_particle,
+          "equivalent particle system rejected a valid particle");
+    first_particles.step(2);
+    second_particles.step(2);
+    check(first_particles.state_hash() == second_particles.state_hash() &&
+              first_particles.particles().front().position == meat2d::Vec2i{4, 6},
+          "particle simulation was not deterministic");
+    first_particles.step(3);
+    check(first_particles.particles().empty(), "expired particles were not retired");
+}
+
+void test_collision_layers_and_debug_draw() {
+    meat2d::scene::Scene scene("layers");
+    const auto wall = scene.create_entity("Wall");
+    const auto actor = scene.create_entity("Actor");
+    check(scene.add_transform(wall, {.position = {20, 0}}) != nullptr &&
+              scene.add_collider(wall,
+                                 {
+                                     .bounds = {0, 0, 8, 40},
+                                     .category_bits = 2,
+                                     .mask_bits = 1,
+                                 }) != nullptr &&
+              scene.add_transform(actor, {.position = {10, 10}}) != nullptr &&
+              scene.add_collider(actor,
+                                 {
+                                     .bounds = {0, 0, 8, 8},
+                                     .category_bits = 1,
+                                     .mask_bits = 1,
+                                 }) != nullptr,
+          "collision-layer scene setup failed");
+    const auto ignored = meat2d::scene::move_and_collide(scene, actor, {10, 0});
+    check(!ignored.hit_horizontal && ignored.applied.x == 10,
+          "collision masks did not ignore an unrelated category");
+    scene.find(actor)->transform->position.x = 10;
+    scene.find(actor)->collider->mask_bits = 2;
+    const auto blocked = meat2d::scene::move_and_collide(scene, actor, {10, 0});
+    check(blocked.hit_horizontal && blocked.applied.x == 2,
+          "collision masks did not enable the requested category");
+
+    meat2d::render::DebugDrawList debug(3);
+    check(debug.add_line({0, 0}, {4, 4}, {255, 0, 0, 255}) &&
+              debug.add_rectangle({1, 2, 3, 4}) && debug.add_circle({5, 6}, 2) &&
+              !debug.add_text({0, 0}, "overflow"),
+          "debug draw list did not enforce its primitive bound");
+    check(debug.primitives().size() == 3U &&
+              debug.primitives()[0].type == meat2d::render::DebugPrimitiveType::Line,
+          "debug draw list stored the wrong primitive data");
+    debug.clear();
+    check(debug.primitives().empty(), "debug draw list did not clear its commands");
+    check(!debug.add_circle({0, 0}, -1), "debug draw list accepted a negative radius");
+}
+
+void test_input_state_and_action_map() {
+    meat2d::input::InputState input;
+    input.set_key(meat2d::input::Key::D, true);
+    input.set_mouse_button(meat2d::input::MouseButton::Left, true);
+    input.set_mouse_position(10, 12);
+    input.set_mouse_position(16, 15);
+    check(input.key_down(meat2d::input::Key::D) && input.key_pressed(meat2d::input::Key::D),
+          "input state did not record a key press");
+    check(input.mouse_down(meat2d::input::MouseButton::Left) &&
+              input.mouse_pressed(meat2d::input::MouseButton::Left),
+          "input state did not record a mouse press");
+    check(input.mouse_x() == 16 && input.mouse_y() == 15 && input.mouse_delta_x() == 16 &&
+              input.mouse_delta_y() == 15,
+          "input state did not accumulate mouse movement");
+
+    meat2d::input::ActionMap actions;
+    const auto move = actions.register_action("move_right");
+    check(move != meat2d::input::invalid_action && actions.find_action("move_right") == move,
+          "action map did not register an action");
+    check(actions.bind_key(move, meat2d::input::Key::D) &&
+              actions.bind_mouse_button(move, meat2d::input::MouseButton::Left),
+          "action map rejected valid bindings");
+    check(actions.down(move, input) && actions.pressed(move, input),
+          "action map did not resolve active bindings");
+    input.begin_frame();
+    check(actions.down(move, input) && !actions.pressed(move, input) &&
+              input.mouse_delta_x() == 0 && input.mouse_delta_y() == 0,
+          "input frame reset cleared held state or retained edge state");
+    input.set_key(meat2d::input::Key::D, false);
+    input.set_mouse_button(meat2d::input::MouseButton::Left, false);
+    check(actions.released(move, input), "action map did not resolve released bindings");
+    check(actions.clear_bindings(move) && !actions.down(move, input),
+          "action map did not clear bindings");
+}
+
+void test_camera_transforms_and_clamping() {
+    meat2d::render::Camera2D camera;
+    camera.set_viewport({100, 50});
+    camera.set_center({50, 25});
+    check(camera.visible_rect() == meat2d::RectI{0, 0, 100, 50},
+          "camera visible rectangle did not match its viewport");
+    check(camera.world_to_screen({50, 25}) == meat2d::Vec2i{50, 25} &&
+              camera.screen_to_world({50, 25}) == meat2d::Vec2i{50, 25},
+          "camera center transform was not reversible");
+    camera.set_zoom_percent(200);
+    check(camera.visible_rect().width == 50 && camera.visible_rect().height == 25,
+          "camera zoom did not scale its visible rectangle");
+    camera.set_center({0, 0});
+    camera.clamp_to({0, 0, 200, 100});
+    const auto clamped = camera.visible_rect();
+    check(clamped.x >= 0 && clamped.y >= 0 && clamped.x + clamped.width <= 200 &&
+              clamped.y + clamped.height <= 100,
+          "camera clamp allowed the viewport outside world bounds");
+}
+
+void test_animation_playback_and_camera_source() {
+    const meat2d::assets::SpriteSheet sheet{
+        .image = "assets/player.png",
+        .frame_width = 16,
+        .frame_height = 16,
+        .animations =
+            {
+                {
+                    .name = "run",
+                    .first_frame = 1,
+                    .frame_count = 3,
+                    .frames_per_second = 10,
+                    .loop = true,
+                },
+                {
+                    .name = "attack",
+                    .first_frame = 4,
+                    .frame_count = 2,
+                    .frames_per_second = 30,
+                    .loop = false,
+                },
+            },
+    };
+    meat2d::assets::SpriteAnimator animator;
+    animator.set_sheet(&sheet);
+    check(animator.play("run") && animator.animation_name() == "run" &&
+              animator.frame_index() == 1U,
+          "sprite animator did not start the requested animation");
+    animator.advance(6);
+    check(animator.frame_index() == 2U, "sprite animator advanced at the wrong fixed-tick rate");
+    animator.advance(6);
+    check(animator.frame_index() == 3U, "sprite animator did not advance to the next frame");
+    animator.advance(6);
+    check(animator.frame_index() == 1U && !animator.finished(),
+          "looping sprite animation did not wrap");
+    check(animator.play("attack") && animator.frame_index() == 4U,
+          "sprite animator could not switch animations");
+    animator.advance(4);
+    check(animator.frame_index() == 5U && animator.finished(),
+          "non-looping sprite animation did not stop on its final frame");
+    const auto frame = animator.frame(96, 16);
+    check(frame && frame->index == 5U, "sprite animator returned an invalid frame rectangle");
+
+    meat2d::World world({.width = 64, .height = 48});
+    meat2d::render::WorldView view;
+    view.update(world);
+    meat2d::render::Camera2D camera;
+    camera.set_viewport({20, 12});
+    camera.set_center({32, 24});
+    check(view.camera_source(camera) == meat2d::RectI{22, 18, 20, 12},
+          "world view did not expose the camera source rectangle");
 }
 
 void test_material_catalog() {
@@ -783,6 +1147,25 @@ void test_project_manager_validation_and_templates() {
               std::filesystem::is_regular_file(test_parent / "valid" / ".github" / "workflows" /
                                                "build.yml"),
           "generated starter omitted code, presets, or publishing workflow");
+
+    const std::array<meat2d::tools::ProjectTemplate, 4> project_templates{
+        meat2d::tools::ProjectTemplate::SideScroller,
+        meat2d::tools::ProjectTemplate::TopDown,
+        meat2d::tools::ProjectTemplate::Metroidvania,
+        meat2d::tools::ProjectTemplate::FallingSand,
+    };
+    for (std::size_t index = 0; index < project_templates.size(); ++index) {
+        const auto result = manager.create_project({
+            .name = "Template Test " + std::to_string(index),
+            .directory = test_parent / ("template-" + std::to_string(index)),
+            .project_template = project_templates[index],
+            .engine_git_tag = "main",
+        });
+        check(result.success, "project manager could not create a selectable game template");
+        check(std::filesystem::is_regular_file(test_parent / ("template-" + std::to_string(index)) /
+                                               "src" / "main.cpp"),
+              "selectable game template omitted its source starter");
+    }
 
     std::error_code error;
     std::filesystem::remove_all(test_parent, error);
@@ -1991,6 +2374,14 @@ void test_parallel_step_records_dirty_regions() {
 int main() {
     try {
         test_cell_layout_and_protocol();
+        test_scene_entity_components_and_hashing();
+        test_scene_collision_queries();
+        test_kinematic_scene_motion();
+        test_rigid_body_step_and_particles();
+        test_collision_layers_and_debug_draw();
+        test_input_state_and_action_map();
+        test_camera_transforms_and_clamping();
+        test_animation_playback_and_camera_source();
         test_packet_codec();
         test_reliable_sequence_window();
         test_chunk_delta_fragmentation();

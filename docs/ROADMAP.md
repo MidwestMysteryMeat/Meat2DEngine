@@ -40,7 +40,7 @@
 
 - [x] Public client/rendering library target
 - [x] `meat2d new` starter-game scaffolder
-- [x] Side-view and top-down starter templates
+- [x] Selectable side-scroller, top-down, metroidvania, and falling-sand starter templates
 - [x] Asset and settings manifests
 - [x] Graphical project editor with a root-confined code/asset browser
 - [x] PNG/JPEG preview and sprite-sheet animation manager

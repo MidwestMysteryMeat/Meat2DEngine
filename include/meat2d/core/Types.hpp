@@ -27,6 +27,8 @@ struct RectI {
     [[nodiscard]] constexpr bool contains(Vec2i point) const noexcept {
         return point.x >= x && point.y >= y && point.x < x + width && point.y < y + height;
     }
+
+    friend constexpr bool operator==(RectI, RectI) = default;
 };
 
 struct Rgba8 {

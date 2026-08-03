@@ -3,6 +3,10 @@
 {{PROJECT_NAME}} is a C++20 game built with
 [Meat2D Engine](https://github.com/MidwestMysteryMeat/Meat2DEngine).
 
+This project was created from a selectable game-type starter. The starter is
+scaffolding, not a limitation: add your own entities, scenes, assets, and
+systems as the game grows.
+
 ## Build and run
 
 ```bash
@@ -58,6 +62,8 @@ to initialize Git, create a GitHub repository with `gh`, and push this project.
 ## Next steps
 
 - Put game code under `src/`.
+- Treat the selected starter as a focused starting point: side-scroller,
+  top-down, metroidvania, or falling-sand.
 - Use the editor's Code & Assets tab to edit source, import PNG/audio/font
   assets, and create `*.sprite.toml` frame/animation metadata.
 - Change the package version when preparing releases.

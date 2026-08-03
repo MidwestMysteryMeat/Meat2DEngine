@@ -83,6 +83,20 @@ std::string profile_name(BuildProfile profile) {
     return profile == BuildProfile::Debug ? "dev" : "release";
 }
 
+std::string_view template_directory(ProjectTemplate project_template) {
+    switch (project_template) {
+    case ProjectTemplate::SideScroller:
+        return "side_scroller";
+    case ProjectTemplate::TopDown:
+        return "top_down";
+    case ProjectTemplate::Metroidvania:
+        return "metroidvania";
+    case ProjectTemplate::FallingSand:
+        return "falling_sand";
+    }
+    return {};
+}
+
 ToolResult from_process(std::string summary, const ProcessResult& process) {
     return {
         .success = process.success(),
@@ -245,7 +259,9 @@ bool ProjectManager::templates_available() const noexcept {
     std::error_code error;
     return std::filesystem::is_directory(template_root_ / "common", error) &&
            std::filesystem::is_directory(template_root_ / "side_scroller", error) &&
-           std::filesystem::is_directory(template_root_ / "top_down", error);
+           std::filesystem::is_directory(template_root_ / "top_down", error) &&
+           std::filesystem::is_directory(template_root_ / "metroidvania", error) &&
+           std::filesystem::is_directory(template_root_ / "falling_sand", error);
 }
 
 ToolResult ProjectManager::create_project(const NewProjectOptions& options) const {
@@ -285,9 +301,15 @@ ToolResult ProjectManager::create_project(const NewProjectOptions& options) cons
     if (!result.success) {
         return result;
     }
-    const auto variant =
-        options.project_template == ProjectTemplate::SideScroller ? "side_scroller" : "top_down";
-    result = copy_template_tree(template_root_ / variant, options.directory, options, true);
+    const auto variant = template_directory(options.project_template);
+    if (variant.empty()) {
+        return {
+            .summary = "Project template is invalid",
+            .details = "Choose side, top, metroidvania, or falling-sand.",
+        };
+    }
+    result = copy_template_tree(template_root_ / std::filesystem::path(variant), options.directory,
+                                options, true);
     if (!result.success) {
         return result;
     }

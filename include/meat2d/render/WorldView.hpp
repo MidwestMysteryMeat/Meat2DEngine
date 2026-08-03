@@ -13,6 +13,8 @@ class World;
 
 namespace meat2d::render {
 
+class Camera2D;
+
 // Maintains a CPU-side RGBA8 image of a chunked world and plans the minimal
 // set of upload regions each frame by consuming the world's chunk dirty
 // bounds. The class is graphics-API free: callers push the returned regions
@@ -46,6 +48,11 @@ class WorldView {
     // bounds, and returns the regions the caller must upload. The returned
     // spans remain valid until the next update() call.
     Update update(World& world, const OverlayPass& overlay = {});
+
+    // Returns the camera source rectangle clipped to the tracked world. The
+    // result can be passed as the source rectangle to an SDL/OpenGL upload or
+    // draw call while this view continues to maintain a full-world cache.
+    [[nodiscard]] RectI camera_source(const Camera2D& camera) const noexcept;
 
     [[nodiscard]] std::int32_t width() const noexcept;
     [[nodiscard]] std::int32_t height() const noexcept;

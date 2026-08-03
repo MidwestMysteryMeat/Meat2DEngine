@@ -11,7 +11,7 @@ namespace {
 
 void print_usage() {
     std::cout << "Meat2D project tools\n\n"
-              << "  meat2d new NAME [--directory PATH] [--template side|top]\n"
+              << "  meat2d new NAME [--directory PATH] [--template side|top|metroidvania|falling-sand]\n"
               << "  meat2d build PATH [--release]\n"
               << "  meat2d run PATH\n"
               << "  meat2d package PATH\n"
@@ -85,9 +85,20 @@ int main(int argc, char** argv) {
                 options.directory = argv[++index];
             } else if (argument == "--template" && index + 1 < argc) {
                 const std::string_view choice(argv[++index]);
-                options.project_template = choice == "top"
-                                               ? meat2d::tools::ProjectTemplate::TopDown
-                                               : meat2d::tools::ProjectTemplate::SideScroller;
+                if (choice == "side" || choice == "side-scroller") {
+                    options.project_template = meat2d::tools::ProjectTemplate::SideScroller;
+                } else if (choice == "top" || choice == "top-down") {
+                    options.project_template = meat2d::tools::ProjectTemplate::TopDown;
+                } else if (choice == "metroidvania") {
+                    options.project_template = meat2d::tools::ProjectTemplate::Metroidvania;
+                } else if (choice == "falling-sand" || choice == "falling_sand" ||
+                           choice == "sand") {
+                    options.project_template = meat2d::tools::ProjectTemplate::FallingSand;
+                } else {
+                    std::cerr << "Unknown template: " << choice
+                              << " (choose side, top, metroidvania, or falling-sand)\n";
+                    return 1;
+                }
             } else if (argument == "--engine-tag" && index + 1 < argc) {
                 options.engine_git_tag = argv[++index];
             }

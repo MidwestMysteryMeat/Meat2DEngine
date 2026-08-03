@@ -1,5 +1,6 @@
 #include "meat2d/render/WorldView.hpp"
 
+#include "meat2d/render/Camera.hpp"
 #include "meat2d/sim/Chunk.hpp"
 #include "meat2d/sim/World.hpp"
 
@@ -57,6 +58,24 @@ WorldView::Update WorldView::update(World& world, const OverlayPass& overlay) {
     overlay_prev_ = overlay_now_;
     std::fill(overlay_now_.begin(), overlay_now_.end(), 0U);
     return {regions_, full_upload};
+}
+
+RectI WorldView::camera_source(const Camera2D& camera) const noexcept {
+    const auto requested = camera.visible_rect();
+    const auto left = std::max<std::int64_t>(0, requested.x);
+    const auto top = std::max<std::int64_t>(0, requested.y);
+    const auto right = std::min<std::int64_t>(width_,
+                                               static_cast<std::int64_t>(requested.x) +
+                                                   requested.width);
+    const auto bottom = std::min<std::int64_t>(height_,
+                                                static_cast<std::int64_t>(requested.y) +
+                                                    requested.height);
+    return {
+        static_cast<std::int32_t>(left),
+        static_cast<std::int32_t>(top),
+        static_cast<std::int32_t>(std::max<std::int64_t>(0, right - left)),
+        static_cast<std::int32_t>(std::max<std::int64_t>(0, bottom - top)),
+    };
 }
 
 std::int32_t WorldView::width() const noexcept {
