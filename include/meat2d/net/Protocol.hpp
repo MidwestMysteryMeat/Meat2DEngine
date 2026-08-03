@@ -39,7 +39,8 @@ enum class PacketType : std::uint8_t {
     DirectoryListResponse,
     DirectoryJoinRequest,
     DirectoryPunch,
-    HolePunch
+    HolePunch,
+    SceneSnapshot
 };
 
 enum class InputKind : std::uint8_t { SetFocus, Paint };

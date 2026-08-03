@@ -158,6 +158,14 @@ const ai::LivingSimulation& AuthoritativeServer::simulation() const noexcept {
     return simulation_;
 }
 
+scene::Scene& AuthoritativeServer::scene() noexcept {
+    return scene_;
+}
+
+const scene::Scene& AuthoritativeServer::scene() const noexcept {
+    return scene_;
+}
+
 ServerUpdateStats AuthoritativeServer::update() {
     ServerUpdateStats stats{};
     if (!running()) {
@@ -441,6 +449,32 @@ void AuthoritativeServer::send_world_updates(ServerUpdateStats& stats) {
             });
             send_message(client, PacketType::Snapshot, snapshot, false, PacketFlagNone, stats);
         }
+
+        const auto scene_hash = scene_.state_hash();
+        const bool scene_changed = std::any_of(
+            clients_.begin(), clients_.end(), [scene_hash](const ClientSlot& client) {
+                return client.known_scene_hash != scene_hash;
+            });
+        if (scene_changed) {
+            const auto scene_snapshot = scene::capture_snapshot(
+                scene_, maximum_fragmented_message_bytes - sizeof(std::uint64_t));
+            const auto scene_payload = scene_snapshot
+                                           ? encode_scene_snapshot({
+                                                 .state_hash = scene_snapshot->state_hash,
+                                                 .bytes = scene_snapshot->bytes,
+                                             })
+                                           : std::vector<std::uint8_t>{};
+            if (!scene_payload.empty()) {
+                for (auto& client : clients_) {
+                    if (client.known_scene_hash == scene_hash ||
+                        !send_fragmented(client, PacketType::SceneSnapshot, scene_payload, stats)) {
+                        continue;
+                    }
+                    client.known_scene_hash = scene_hash;
+                    ++stats.scene_snapshot_messages;
+                }
+            }
+        }
     }
 
     if (current_tick % config_.chunk_interval_ticks != 0U) {
@@ -496,14 +530,23 @@ void AuthoritativeServer::send_chunk(ClientSlot& client, std::size_t chunk_index
     if (!encoded) {
         return;
     }
-    const auto fragments = fragment_payload(client.next_message_id++, *encoded);
-    if (fragments.empty()) {
+    if (!send_fragmented(client, PacketType::ChunkDelta, *encoded, stats)) {
         return;
     }
-    for (const auto& fragment : fragments) {
-        send_message(client, PacketType::ChunkDelta, fragment, true, PacketFlagFragment, stats);
-    }
     ++stats.chunk_messages;
+}
+
+bool AuthoritativeServer::send_fragmented(ClientSlot& client, PacketType type,
+                                          std::span<const std::uint8_t> payload,
+                                          ServerUpdateStats& stats) {
+    const auto fragments = fragment_payload(client.next_message_id++, payload);
+    if (fragments.empty()) {
+        return false;
+    }
+    for (const auto& fragment : fragments) {
+        send_message(client, type, fragment, true, PacketFlagFragment, stats);
+    }
+    return true;
 }
 
 void AuthoritativeServer::flush_channels(ServerUpdateStats& stats) {
@@ -631,6 +674,7 @@ bool AuthoritativeClient::begin_connection(std::string player_name, std::uint64_
     welcome_.reset();
     latest_snapshot_.reset();
     replicated_world_.reset();
+    replicated_scene_.reset();
     chunk_revisions_.clear();
     last_error_.clear();
     return true;
@@ -805,6 +849,14 @@ const World* AuthoritativeClient::replicated_world() const noexcept {
 
 World* AuthoritativeClient::replicated_world() noexcept {
     return replicated_world_.get();
+}
+
+const scene::Scene* AuthoritativeClient::replicated_scene() const noexcept {
+    return replicated_scene_.get();
+}
+
+scene::Scene* AuthoritativeClient::replicated_scene() noexcept {
+    return replicated_scene_.get();
 }
 
 std::size_t AuthoritativeClient::pending_predictions() const noexcept {
@@ -982,6 +1034,27 @@ void AuthoritativeClient::handle_packet(const Packet& packet, ClientUpdateStats&
             });
             ++stats.completed_chunks;
             stats.changed_cells += applied->changed_cells;
+        }
+        break;
+    case PacketType::SceneSnapshot:
+        if ((packet.header.flags & PacketFlagFragment) == 0U) {
+            ++stats.invalid_datagrams;
+            break;
+        }
+        if (const auto completed = fragments_.accept(packet.payload, network_update_)) {
+            const auto message = decode_scene_snapshot(*completed);
+            const auto decoded = message
+                                     ? scene::decode_snapshot({
+                                           .state_hash = message->state_hash,
+                                           .bytes = message->bytes,
+                                       })
+                                     : std::optional<scene::Scene>{};
+            if (!decoded) {
+                ++stats.invalid_datagrams;
+                break;
+            }
+            replicated_scene_ = std::make_unique<scene::Scene>(std::move(*decoded));
+            ++stats.completed_scene_snapshots;
         }
         break;
     case PacketType::Disconnect:

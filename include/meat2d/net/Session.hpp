@@ -6,6 +6,8 @@
 #include "meat2d/net/Fragmentation.hpp"
 #include "meat2d/net/PacketCodec.hpp"
 #include "meat2d/net/Reliability.hpp"
+#include "meat2d/scene/Scene.hpp"
+#include "meat2d/scene/SceneSnapshot.hpp"
 #include "meat2d/net/UdpSocket.hpp"
 
 #include <cstddef>
@@ -55,6 +57,7 @@ struct ServerUpdateStats {
     std::uint32_t lan_replies{};
     std::uint32_t directory_heartbeats{};
     std::uint32_t nat_punches{};
+    std::uint32_t scene_snapshot_messages{};
 };
 
 class AuthoritativeServer {
@@ -75,6 +78,8 @@ class AuthoritativeServer {
 
     [[nodiscard]] ai::LivingSimulation& simulation() noexcept;
     [[nodiscard]] const ai::LivingSimulation& simulation() const noexcept;
+    [[nodiscard]] scene::Scene& scene() noexcept;
+    [[nodiscard]] const scene::Scene& scene() const noexcept;
     ServerUpdateStats update();
 
   private:
@@ -90,6 +95,7 @@ class AuthoritativeServer {
         std::uint32_t last_heard_update{};
         std::uint32_t last_input_sequence{};
         std::uint32_t next_message_id{1};
+        std::uint64_t known_scene_hash{};
         std::uint8_t inputs_this_update{};
         bool needs_ack{};
     };
@@ -111,12 +117,15 @@ class AuthoritativeServer {
     void send_message(ClientSlot& client, PacketType type, std::span<const std::uint8_t> payload,
                       bool reliable, std::uint8_t additional_flags, ServerUpdateStats& stats);
     void send_chunk(ClientSlot& client, std::size_t chunk_index, ServerUpdateStats& stats);
+    bool send_fragmented(ClientSlot& client, PacketType type,
+                         std::span<const std::uint8_t> payload, ServerUpdateStats& stats);
     void flush_channels(ServerUpdateStats& stats);
     void remove_timed_out_clients();
     void send_directory_registration(ServerUpdateStats& stats);
 
     ServerConfig config_;
     ai::LivingSimulation simulation_;
+    scene::Scene scene_{"network"};
     UdpSocket socket_;
     LanServerAdvertiser lan_advertiser_;
     std::optional<Endpoint> public_directory_;
@@ -144,6 +153,7 @@ struct ClientUpdateStats {
     std::uint32_t completed_chunks{};
     std::uint32_t changed_cells{};
     std::uint32_t chunk_hash_mismatches{};
+    std::uint32_t completed_scene_snapshots{};
     std::uint32_t reapplied_predictions{};
 };
 
@@ -171,6 +181,8 @@ class AuthoritativeClient {
     [[nodiscard]] const std::optional<SnapshotMessage>& latest_snapshot() const noexcept;
     [[nodiscard]] const World* replicated_world() const noexcept;
     [[nodiscard]] World* replicated_world() noexcept;
+    [[nodiscard]] const scene::Scene* replicated_scene() const noexcept;
+    [[nodiscard]] scene::Scene* replicated_scene() noexcept;
     [[nodiscard]] std::size_t pending_predictions() const noexcept;
     [[nodiscard]] std::uint32_t acknowledged_input_sequence() const noexcept;
     [[nodiscard]] std::uint64_t chunk_hash_mismatches() const noexcept;
@@ -214,6 +226,7 @@ class AuthoritativeClient {
     std::optional<WelcomeMessage> welcome_;
     std::optional<SnapshotMessage> latest_snapshot_;
     std::unique_ptr<World> replicated_world_;
+    std::unique_ptr<scene::Scene> replicated_scene_;
     std::vector<std::uint64_t> chunk_revisions_;
     std::vector<PredictedPaint> predicted_paints_;
     std::uint32_t acknowledged_input_sequence_{};

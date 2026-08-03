@@ -153,7 +153,10 @@ server, replay, and supported client configurations.
 
 Status: planned
 
-- [ ] Replicate general entities/components, not only terrain-oriented state.
+- [x] Reliable fragmented hash-checked scene snapshots for general entities;
+      incremental component deltas and prediction remain.
+- [ ] Incremental component replication, interest management, and movement
+      prediction for ordinary entities.
 - [ ] Late join, baseline snapshots, reconnection, and session resume.
 - [ ] Entity interest management, interpolation, and lag simulation.
 - [ ] Authenticated/encrypted sessions and protocol version negotiation.

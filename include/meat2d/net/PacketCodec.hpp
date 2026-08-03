@@ -101,6 +101,11 @@ struct SnapshotMessage {
     std::uint16_t active_chunks{};
 };
 
+struct SceneSnapshotMessage {
+    std::uint64_t state_hash{};
+    std::vector<std::uint8_t> bytes;
+};
+
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> encode_packet(
     PacketHeader header,
     std::span<const std::uint8_t> payload);
@@ -119,6 +124,10 @@ struct SnapshotMessage {
     std::span<const std::uint8_t> payload);
 [[nodiscard]] std::vector<std::uint8_t> encode_snapshot(const SnapshotMessage& message);
 [[nodiscard]] std::optional<SnapshotMessage> decode_snapshot(
+    std::span<const std::uint8_t> payload);
+[[nodiscard]] std::vector<std::uint8_t> encode_scene_snapshot(
+    const SceneSnapshotMessage& message);
+[[nodiscard]] std::optional<SceneSnapshotMessage> decode_scene_snapshot(
     std::span<const std::uint8_t> payload);
 
 } // namespace meat2d::net

@@ -1,4 +1,5 @@
 #include "meat2d/net/PacketCodec.hpp"
+#include "meat2d/net/Fragmentation.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -211,7 +212,7 @@ std::optional<Packet> decode_packet(std::span<const std::uint8_t> datagram) {
     }
 
     if (packet.header.magic != protocol_magic || packet.header.version != protocol_version ||
-        type > static_cast<std::uint8_t>(PacketType::HolePunch) ||
+        type > static_cast<std::uint8_t>(PacketType::SceneSnapshot) ||
         (packet.header.flags &
          static_cast<std::uint8_t>(~(PacketFlagReliable | PacketFlagFragment))) != 0U ||
         packet.header.reserved != 0U || packet.header.payload_bytes != reader.remaining()) {
@@ -333,6 +334,35 @@ std::optional<SnapshotMessage> decode_snapshot(std::span<const std::uint8_t> pay
         !reader.read_u16(message.active_chunks) || !reader.empty()) {
         return std::nullopt;
     }
+    return message;
+}
+
+std::vector<std::uint8_t> encode_scene_snapshot(const SceneSnapshotMessage& message) {
+    if (message.bytes.empty() ||
+        message.bytes.size() > maximum_fragmented_message_bytes - sizeof(std::uint64_t)) {
+        return {};
+    }
+    ByteWriter writer(maximum_fragmented_message_bytes);
+    if (!writer.write_u64(message.state_hash) || !writer.write_bytes(message.bytes)) {
+        return {};
+    }
+    return writer.take();
+}
+
+std::optional<SceneSnapshotMessage> decode_scene_snapshot(
+    std::span<const std::uint8_t> payload) {
+    if (payload.size() <= sizeof(std::uint64_t) ||
+        payload.size() > maximum_fragmented_message_bytes) {
+        return std::nullopt;
+    }
+    SceneSnapshotMessage message{};
+    ByteReader reader(payload);
+    std::span<const std::uint8_t> bytes;
+    if (!reader.read_u64(message.state_hash) || !reader.read_bytes(reader.remaining(), bytes) ||
+        bytes.empty()) {
+        return std::nullopt;
+    }
+    message.bytes.assign(bytes.begin(), bytes.end());
     return message;
 }
 

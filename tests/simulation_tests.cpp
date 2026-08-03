@@ -824,6 +824,17 @@ void test_packet_codec() {
               snapshot_message->state_hash == 0xABCDEF0123456789ULL,
           "snapshot message changed during serialization");
 
+    const meat2d::net::SceneSnapshotMessage scene_snapshot_message{
+        .state_hash = 0x1020304050607080ULL,
+        .bytes = {0x4D, 0x32, 0x53, 0x43, 0x01},
+    };
+    const auto decoded_scene_snapshot = meat2d::net::decode_scene_snapshot(
+        meat2d::net::encode_scene_snapshot(scene_snapshot_message));
+    check(decoded_scene_snapshot &&
+              decoded_scene_snapshot->state_hash == scene_snapshot_message.state_hash &&
+              decoded_scene_snapshot->bytes == scene_snapshot_message.bytes,
+          "scene snapshot network payload changed during serialization");
+
     const auto oversized_welcome = meat2d::net::decode_welcome(meat2d::net::encode_welcome({
         .client_nonce = 1,
         .session_token = 2,
@@ -1588,6 +1599,10 @@ void test_authoritative_client_server_session() {
         .client_timeout_updates = 100,
         .public_directory = std::nullopt,
     });
+    const auto network_entity = server.scene().create_entity("Network Actor");
+    check(server.scene().add_transform(network_entity, {.position = {12, 34}}) != nullptr &&
+              server.scene().add_tag(network_entity, "replicated"),
+          "server could not prepare a replicated scene entity");
     check(server.start(), "authoritative server failed to start");
     if (!server.running()) {
         return;
@@ -1620,6 +1635,7 @@ void test_authoritative_client_server_session() {
           "connected client could not send a paint input");
     bool server_applied = false;
     bool client_replicated = false;
+    bool scene_replicated = false;
     for (int update = 0; update < 120; ++update) {
         client.update();
         server.update();
@@ -1629,13 +1645,18 @@ void test_authoritative_client_server_session() {
         const auto* mirror = client.replicated_world();
         client_replicated =
             mirror != nullptr && mirror->material({10, 10}) == meat2d::MaterialId::Stone;
-        if (server_applied && client_replicated && client.latest_snapshot()) {
+        const auto* scene_mirror = client.replicated_scene();
+        scene_replicated = scene_mirror != nullptr &&
+                           scene_mirror->find_tagged("replicated").size() == 1U &&
+                           scene_mirror->world_position(network_entity) == meat2d::Vec2i{12, 34};
+        if (server_applied && client_replicated && scene_replicated && client.latest_snapshot()) {
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     check(server_applied, "server did not apply validated client input");
     check(client_replicated, "interest-managed chunk delta did not reach client mirror");
+    check(scene_replicated, "fragmented authoritative scene snapshot did not reach client mirror");
     check(client.latest_snapshot().has_value(), "client received no authoritative snapshot");
 
     for (int update = 0; update < 140; ++update) {
