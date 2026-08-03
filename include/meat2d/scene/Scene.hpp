@@ -109,8 +109,19 @@ class Scene {
     [[nodiscard]] bool has_tag(EntityId id, std::string_view tag) const noexcept;
     [[nodiscard]] std::vector<EntityId> find_tagged(std::string_view tag) const;
 
+    // Groups are the conventional gameplay name for deterministic scene tags.
+    bool add_group(EntityId id, std::string group);
+    bool remove_group(EntityId id, std::string_view group);
+    [[nodiscard]] bool has_group(EntityId id, std::string_view group) const noexcept;
+    [[nodiscard]] std::vector<EntityId> find_group(std::string_view group) const;
+
     [[nodiscard]] std::span<Entity> entities() noexcept;
     [[nodiscard]] std::span<const Entity> entities() const noexcept;
+
+    // Returns sprite-bearing entities in stable entity order for a render
+    // layer. Invisible sprites can be excluded without changing scene state.
+    [[nodiscard]] std::vector<EntityId> find_sprites_in_layer(
+        std::int16_t layer, bool visible_only = true) const;
 
     [[nodiscard]] Transform* add_transform(EntityId id, Transform value = {});
     [[nodiscard]] Sprite* add_sprite(EntityId id, Sprite value = {});

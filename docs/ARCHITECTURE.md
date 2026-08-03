@@ -57,7 +57,9 @@ of the network packet protocol. `Scene::state_hash()` hashes serialized field
 values rather than addresses or structure padding, providing a deterministic
 baseline for future editor, save, and replication work. Version 4 adds parent
 IDs and sorted tags while the decoder still accepts version 3 documents with
-no hierarchy metadata.
+no hierarchy metadata. Gameplay groups use the same deterministic tag storage,
+and `find_sprites_in_layer()` provides stable render-layer queries over sprite
+components without making rendering part of the authoritative world.
 
 Input is represented by `meat2d::input::InputState` and `ActionMap`, which keep
 keyboard and mouse state independent of SDL or any other platform backend.

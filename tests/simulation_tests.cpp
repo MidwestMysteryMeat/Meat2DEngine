@@ -234,6 +234,10 @@ void test_scene_hierarchy_and_tags() {
     check(scene.add_tag(child, "actors") && scene.add_tag(grandchild, "actors") &&
               scene.add_tag(grandchild, "selectable") && !scene.add_tag(child, "actors"),
           "scene tag operations did not enforce unique tags");
+    check(scene.add_group(root, "actors") && scene.has_group(root, "actors") &&
+              scene.find_group("actors").size() == 3U && scene.remove_group(root, "actors") &&
+              !scene.has_group(root, "actors"),
+          "scene group aliases did not preserve deterministic tag behavior");
     const auto tagged = scene.find_tagged("actors");
     check(tagged.size() == 2U && tagged[0] == child && tagged[1] == grandchild,
           "scene tag query did not preserve deterministic entity order");
@@ -245,6 +249,12 @@ void test_scene_hierarchy_and_tags() {
               decoded->world_position(grandchild) == meat2d::Vec2i{115, 62} &&
               decoded->has_tag(child, "actors"),
           "scene hierarchy and tags did not survive serialization");
+
+    check(scene.add_sprite(child, {.layer = 3}) != nullptr &&
+              scene.add_sprite(grandchild, {.layer = 3, .visible = false}) != nullptr &&
+              scene.find_sprites_in_layer(3).size() == 1U &&
+              scene.find_sprites_in_layer(3, false).size() == 2U,
+          "scene render-layer query did not filter sprites deterministically");
 
     scene.clear_events();
     const auto copied_root = scene.duplicate_subtree(root, meat2d::scene::invalid_entity,

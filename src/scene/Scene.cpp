@@ -358,6 +358,22 @@ std::vector<EntityId> Scene::find_tagged(std::string_view tag) const {
     return result;
 }
 
+bool Scene::add_group(EntityId id, std::string group) {
+    return add_tag(id, std::move(group));
+}
+
+bool Scene::remove_group(EntityId id, std::string_view group) {
+    return remove_tag(id, group);
+}
+
+bool Scene::has_group(EntityId id, std::string_view group) const noexcept {
+    return has_tag(id, group);
+}
+
+std::vector<EntityId> Scene::find_group(std::string_view group) const {
+    return find_tagged(group);
+}
+
 void Scene::emit_event(SceneEvent event) {
     if (events_.size() < maximum_scene_events) {
         events_.push_back(std::move(event));
@@ -475,6 +491,18 @@ std::span<Entity> Scene::entities() noexcept {
 
 std::span<const Entity> Scene::entities() const noexcept {
     return std::span<const Entity>(entities_);
+}
+
+std::vector<EntityId> Scene::find_sprites_in_layer(std::int16_t layer,
+                                                   bool visible_only) const {
+    std::vector<EntityId> result;
+    for (const auto& entity : entities_) {
+        if (entity.sprite && entity.sprite->layer == layer &&
+            (!visible_only || entity.sprite->visible)) {
+            result.push_back(entity.id);
+        }
+    }
+    return result;
 }
 
 Transform* Scene::add_transform(EntityId id, Transform value) {
