@@ -79,6 +79,13 @@ representation with different serialization semantics.
 removed, and changed records. The comparison is entity-content-only and does
 not treat scene names or transient event history as gameplay entity changes.
 
+`Scene::make_patch(target)` extends that diff into a field-complete,
+hash-checked patch carrying full added/changed entities, removals, scene name,
+and next-ID state. `Scene::apply_patch()` validates the baseline, hierarchy,
+component data, and final target hash on a temporary scene before replacing the
+live scene, giving editor, save, and future incremental replication code one
+atomic mutation contract.
+
 `capture_snapshot()` and `decode_snapshot()` add a bounded, hash-checked
 document boundary around scene serialization. Editor autosave, prefab storage,
 and future fragmented entity replication can share this validation without

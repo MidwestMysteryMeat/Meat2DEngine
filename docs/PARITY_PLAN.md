@@ -93,7 +93,10 @@ Status: **in progress**
       and script components.
 - [x] Editor-managed prefab overrides with validated deterministic batches.
 - [x] Fixed simulation tick accumulator with interpolated rendering contract.
-- [ ] Deterministic serialization for all networked components.
+- [x] Deterministic serialization and hash-checked atomic patches for the
+      current networked scene components.
+- [ ] Versioned serialization contracts for future UI, audio, script, and
+      gameplay components.
 
 Acceptance gate: a top-down and a side-scroller sample can be built without
 each sample implementing its own entity and scene framework.
@@ -198,11 +201,13 @@ sample using the documented workflow.
 
 ## Immediate work queue
 
-1. Merge and validate the Phase 0 CMake changes.
-2. Add CI and package-consumer validation.
-3. Split the monolithic simulation test into subsystem targets while retaining
-   the deterministic aggregate test.
-4. Design the entity/component serialization contract before implementing the
-   editor or network replication layer.
-5. Resolve streamed-world addressing before expanding persistence and interest
-   management.
+1. Build the conventional renderer/content path: texture cache, atlas lookup,
+   sprite batching, culling, and backend adapters.
+2. Add the editor scene tree, viewport, inspector, asset import, and tilemap
+   painting workflows on top of snapshots, history, diffs, and patches.
+3. Replace full scene replication with bounded incremental component patches,
+   then add ordinary-entity interest and interpolation.
+4. Complete authoritative save/replay coverage for scenes, agents, scripts,
+   and session metadata.
+5. Ship and test every requested genre template through the same package,
+   editor, save, and multiplayer workflows.

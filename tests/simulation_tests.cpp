@@ -156,6 +156,50 @@ void test_scene_diffs() {
                                      .entity = added},
           "scene diff did not report stable added/removed/changed entities");
     check(target.diff(target).empty(), "scene diff reported changes for an identical scene");
+
+    const auto patch = base.make_patch(target);
+    meat2d::scene::Scene patched = base;
+    patched.clear_events();
+    check(patch.base_hash == base.state_hash() && patch.target_hash == target.state_hash() &&
+              patch.operations.size() == differences.size() && patched.apply_patch(patch) &&
+              patched.state_hash() == target.state_hash() && patched.diff(target).empty(),
+          "scene patch did not reproduce the exact target scene atomically");
+    meat2d::scene::Scene wrong_base("wrong-base");
+    const auto wrong_base_hash = wrong_base.state_hash();
+    check(!wrong_base.apply_patch(patch) && wrong_base.state_hash() == wrong_base_hash,
+          "scene patch applied to an unrelated baseline");
+    auto tampered_patch = patch;
+    tampered_patch.target_hash ^= 1U;
+    const auto before_tampered_patch = base.state_hash();
+    check(!base.apply_patch(tampered_patch) && base.state_hash() == before_tampered_patch,
+          "tampered scene patch partially modified its target");
+
+    meat2d::scene::Scene cycle_base("cycle-base");
+    const auto cycle_left = cycle_base.create_entity("Left");
+    const auto cycle_right = cycle_base.create_entity("Right");
+    meat2d::scene::Entity cycle_left_target{};
+    cycle_left_target.id = cycle_left;
+    cycle_left_target.name = "Left";
+    cycle_left_target.enabled = true;
+    cycle_left_target.parent = cycle_right;
+    meat2d::scene::Entity cycle_right_target{};
+    cycle_right_target.id = cycle_right;
+    cycle_right_target.name = "Right";
+    cycle_right_target.enabled = true;
+    cycle_right_target.parent = cycle_left;
+    meat2d::scene::ScenePatch cycle_patch{};
+    cycle_patch.scene_name = cycle_base.name();
+    cycle_patch.next_entity_id = 3U;
+    cycle_patch.base_hash = cycle_base.state_hash();
+    cycle_patch.operations = {
+        {.type = meat2d::scene::SceneDifferenceType::Changed, .entity = cycle_left_target},
+        {.type = meat2d::scene::SceneDifferenceType::Changed, .entity = cycle_right_target},
+    };
+    const auto before_cycle_patch = cycle_base.state_hash();
+    check(!cycle_base.apply_patch(cycle_patch) && cycle_base.state_hash() == before_cycle_patch &&
+              cycle_base.parent_of(cycle_left) == meat2d::scene::invalid_entity &&
+              cycle_base.parent_of(cycle_right) == meat2d::scene::invalid_entity,
+          "invalid cyclic scene patch was not rejected atomically");
 }
 
 void test_scene_snapshots() {

@@ -102,6 +102,25 @@ struct Entity {
     friend bool operator==(const Entity&, const Entity&) = default;
 };
 
+struct ScenePatchOperation {
+    SceneDifferenceType type{};
+    Entity entity{};
+
+    friend bool operator==(const ScenePatchOperation&, const ScenePatchOperation&) = default;
+};
+
+// A complete, deterministic entity patch between two scene baselines. The
+// hashes make applying a patch to the wrong scene fail before mutation.
+struct ScenePatch {
+    std::string scene_name;
+    EntityId next_entity_id{1};
+    std::uint64_t base_hash{};
+    std::uint64_t target_hash{};
+    std::vector<ScenePatchOperation> operations;
+
+    friend bool operator==(const ScenePatch&, const ScenePatch&) = default;
+};
+
 // An editor/prefab instance override. Optional component fields use a nested
 // optional: disengaged outer value means "leave unchanged", while an engaged
 // empty inner value means "remove this component".
@@ -205,6 +224,12 @@ class Scene {
     // Results are sorted by stable entity ID; metadata such as scene name is
     // intentionally outside this entity-content diff.
     [[nodiscard]] std::vector<SceneDifference> diff(const Scene& target) const;
+
+    // Builds and atomically applies field-complete entity changes. Scene
+    // metadata and next-ID state are included so a successful patch reaches
+    // the exact target hash, not merely the same visible entities.
+    [[nodiscard]] ScenePatch make_patch(const Scene& target) const;
+    bool apply_patch(const ScenePatch& patch);
 
     // Encodes a versioned, little-endian scene document. The format is kept
     // independent from the network protocol so editor files can evolve on a
