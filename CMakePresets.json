@@ -45,6 +45,24 @@
       }
     },
     {
+      "name": "ubsan-headless",
+      "displayName": "UndefinedBehaviorSanitizer Headless Debug",
+      "inherits": "headless",
+      "binaryDir": "${sourceDir}/build/ubsan-headless",
+      "cacheVariables": {
+        "MEAT2D_SANITIZER": "undefined"
+      }
+    },
+    {
+      "name": "tsan-headless",
+      "displayName": "ThreadSanitizer Headless Debug",
+      "inherits": "headless",
+      "binaryDir": "${sourceDir}/build/tsan-headless",
+      "cacheVariables": {
+        "MEAT2D_SANITIZER": "thread"
+      }
+    },
+    {
       "name": "release",
       "displayName": "Release",
       "generator": "Ninja",
@@ -72,6 +90,14 @@
       "configurePreset": "asan-headless"
     },
     {
+      "name": "ubsan-headless",
+      "configurePreset": "ubsan-headless"
+    },
+    {
+      "name": "tsan-headless",
+      "configurePreset": "tsan-headless"
+    },
+    {
       "name": "release",
       "configurePreset": "release"
     }
@@ -94,6 +120,20 @@
     {
       "name": "asan-headless",
       "configurePreset": "asan-headless",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ubsan-headless",
+      "configurePreset": "ubsan-headless",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "tsan-headless",
+      "configurePreset": "tsan-headless",
       "output": {
         "outputOnFailure": true
       }

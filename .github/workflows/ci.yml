@@ -49,6 +49,14 @@ jobs:
       - name: Build package consumer
         run: cmake --build "$RUNNER_TEMP/meat2d-consumer"
 
+      - name: Build release archives
+        run: cmake --build build/headless --target package
+
+      - name: Verify release archives
+        shell: bash
+        run: |
+          test -n "$(find build/headless -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print -quit)"
+
   windows:
     name: Windows (MSVC)
     # Keep the MSVC generator aligned with the broadly available hosted image.
@@ -72,9 +80,13 @@ jobs:
       - name: Test
         run: ctest --test-dir build/windows --build-config Debug --output-on-failure
 
-  asan:
-    name: Linux (AddressSanitizer)
+  sanitizers:
+    name: Linux (${{ matrix.sanitizer }} sanitizer)
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -83,10 +95,21 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes clang cmake ninja-build
 
       - name: Configure
-        run: cmake --preset asan-headless -DCMAKE_CXX_COMPILER=clang++
+        run: >-
+          cmake -S . -B build/${{ matrix.sanitizer }}-headless
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DMEAT2D_SANITIZER=${{ matrix.sanitizer }}
+          -DMEAT2D_BUILD_CLIENT=OFF
+          -DMEAT2D_BUILD_LAUNCHER=OFF
+          -DMEAT2D_BUILD_EXAMPLES=OFF
+          -DMEAT2D_BUILD_SERVER=ON
+          -DMEAT2D_BUILD_TESTS=ON
+          -DMEAT2D_BUILD_BENCHMARKS=ON
 
       - name: Build
-        run: cmake --build --preset asan-headless
+        run: cmake --build build/${{ matrix.sanitizer }}-headless
 
       - name: Test
-        run: ctest --preset asan-headless
+        run: ctest --test-dir build/${{ matrix.sanitizer }}-headless --output-on-failure
