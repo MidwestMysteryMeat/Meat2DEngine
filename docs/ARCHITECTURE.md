@@ -122,6 +122,12 @@ metadata, and solid collision definitions. Its `M2TM` document format and
 state hash are independent from SDL and the network packet protocol, so editor,
 game, server, and package-consumer code can share the same map asset.
 
+`meat2d::render::SpriteBatch` converts visible scene sprites into a bounded,
+backend-neutral command list. It applies integer camera culling, preserves
+asset/source rectangles and flips, and sorts by render layer then stable entity
+ID so SDL, OpenGL, or another backend can consume the same deterministic draw
+order.
+
 ## Cellular world
 
 The world is divided into 64×64 chunks. A chunk currently stores 4,096

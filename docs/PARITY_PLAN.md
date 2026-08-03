@@ -105,7 +105,9 @@ each sample implementing its own entity and scene framework.
 
 Status: planned
 
-- [ ] Texture/atlas cache and sprite batching.
+- [ ] Texture/atlas cache.
+- [x] Bounded camera-culled backend-neutral sprite batching with deterministic
+      layer/entity ordering.
 - [x] Backend-neutral keyboard/mouse input state and action bindings.
 - [ ] SDL/gamepad/touch adapters, culling, layers, parallax, and screen effects.
 - [x] Sprite animation playback.

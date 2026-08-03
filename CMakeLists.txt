@@ -98,6 +98,7 @@ add_library(
     src/render/Camera.cpp
     src/render/DebugDraw.cpp
     src/render/Particles.cpp
+    src/render/SpriteBatch.cpp
     src/render/WorldView.cpp
 )
 add_library(Meat2D::Render ALIAS meat2d_render)

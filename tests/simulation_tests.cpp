@@ -16,6 +16,7 @@
 #include "meat2d/render/Camera.hpp"
 #include "meat2d/render/DebugDraw.hpp"
 #include "meat2d/render/Particles.hpp"
+#include "meat2d/render/SpriteBatch.hpp"
 #include "meat2d/render/WorldView.hpp"
 #include "meat2d/scene/Physics.hpp"
 #include "meat2d/scene/Scene.hpp"
@@ -668,6 +669,39 @@ void test_collision_layers_and_debug_draw() {
     debug.clear();
     check(debug.primitives().empty(), "debug draw list did not clear its commands");
     check(!debug.add_circle({0, 0}, -1), "debug draw list accepted a negative radius");
+}
+
+void test_sprite_batch() {
+    meat2d::scene::Scene scene("sprites");
+    const auto back = scene.create_entity("Back");
+    const auto front = scene.create_entity("Front");
+    const auto hidden = scene.create_entity("Hidden");
+    const auto offscreen = scene.create_entity("Offscreen");
+    check(scene.add_transform(back, {.position = {10, 10}, .scale = {2, 1}}) != nullptr &&
+              scene.add_sprite(back, {.asset_id = 2, .source = {0, 0, 16, 8}, .layer = 1}) !=
+                  nullptr &&
+              scene.add_transform(front, {.position = {12, 12}, .scale = {-1, -1}}) != nullptr &&
+              scene.add_sprite(front, {.asset_id = 3, .source = {16, 0, 8, 8}, .layer = 3}) !=
+                  nullptr &&
+              scene.add_sprite(hidden, {.asset_id = 4, .source = {0, 0, 8, 8}, .visible = false}) !=
+                  nullptr &&
+              scene.add_transform(offscreen, {.position = {500, 500}}) != nullptr &&
+              scene.add_sprite(offscreen, {.asset_id = 5, .source = {0, 0, 8, 8}}) != nullptr,
+          "sprite batch fixture could not be prepared");
+    meat2d::render::Camera2D camera;
+    camera.set_center({50, 30});
+    camera.set_viewport({100, 60});
+    meat2d::render::SpriteBatch batch(3);
+    check(batch.build(scene, camera) && batch.commands().size() == 2U &&
+              batch.commands()[0].entity == back && batch.commands()[1].entity == front &&
+              batch.commands()[0].destination == meat2d::RectI{10, 10, 32, 8} &&
+              batch.commands()[1].flip_x && batch.commands()[1].flip_y,
+          "sprite batch did not cull or order camera-visible sprites deterministically");
+    check(batch.build(scene, camera, false) && batch.commands().size() == 3U,
+          "sprite batch could not include explicitly hidden sprites");
+    meat2d::render::SpriteBatch bounded(1);
+    check(!bounded.build(scene, camera, false) && bounded.commands().empty(),
+          "sprite batch exceeded its command budget or partially replaced commands");
 }
 
 void test_input_state_and_action_map() {
@@ -2792,6 +2826,7 @@ int main() {
         test_kinematic_scene_motion();
         test_rigid_body_step_and_particles();
         test_collision_layers_and_debug_draw();
+        test_sprite_batch();
         test_input_state_and_action_map();
         test_camera_transforms_and_clamping();
         test_animation_playback_and_camera_source();
