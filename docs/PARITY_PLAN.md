@@ -81,10 +81,11 @@ Status: **in progress**
 - [x] Collision category/mask filtering.
 - [x] Ordered scene lifecycle/component/tag events and deterministic subtree
       duplication for prefab-style composition.
+- [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
 - [ ] Parenting, layers, tags, groups, events, scene transitions, and prefabs.
-- [ ] Fixed simulation tick with interpolated rendering.
+- [x] Fixed simulation tick accumulator with interpolated rendering contract.
 - [ ] Deterministic serialization for all networked components.
 
 Acceptance gate: a top-down and a side-scroller sample can be built without

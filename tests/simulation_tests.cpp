@@ -2,6 +2,7 @@
 #include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
 #include "meat2d/assets/TileMap.hpp"
+#include "meat2d/core/FixedTimestep.hpp"
 #include "meat2d/input/Input.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
 #include "meat2d/net/Discovery.hpp"
@@ -56,6 +57,28 @@ void test_cell_layout_and_protocol() {
           "authoritative organism cell must remain eight bytes");
     check(sizeof(meat2d::net::PacketHeader) == 28, "network header layout unexpectedly changed");
     check(meat2d::net::maximum_players == 8, "first multiplayer target must remain eight players");
+}
+
+void test_fixed_timestep_accumulator() {
+    meat2d::core::FixedTimestep clock(10, 2);
+    check(clock.ticks_per_second() == 10U && clock.max_steps_per_advance() == 2U &&
+              clock.fixed_interval() == std::chrono::milliseconds(100),
+          "fixed timestep configuration was not normalized correctly");
+    const auto half_tick = clock.advance(std::chrono::milliseconds(50));
+    check(half_tick.steps == 0U && half_tick.interpolation_alpha > 0.49 &&
+              half_tick.interpolation_alpha < 0.51 && !half_tick.dropped_time,
+          "fixed timestep did not preserve a partial render interval");
+    const auto one_tick = clock.advance(std::chrono::milliseconds(50));
+    check(one_tick.steps == 1U && one_tick.interpolation_alpha == 0.0 &&
+              !one_tick.dropped_time,
+          "fixed timestep did not release exactly one simulation tick");
+    const auto capped = clock.advance(std::chrono::seconds(2));
+    check(capped.steps == 2U && capped.dropped_time && capped.interpolation_alpha == 0.0,
+          "fixed timestep did not bound a stalled-frame catch-up");
+    clock.reset();
+    const auto negative = clock.advance(std::chrono::milliseconds(-1));
+    check(negative.steps == 0U && negative.interpolation_alpha == 0.0,
+          "fixed timestep accepted negative elapsed time");
 }
 
 void test_scene_entity_components_and_hashing() {
@@ -2475,6 +2498,7 @@ void test_parallel_step_records_dirty_regions() {
 int main() {
     try {
         test_cell_layout_and_protocol();
+        test_fixed_timestep_accumulator();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
         test_tile_map_content_and_serialization();

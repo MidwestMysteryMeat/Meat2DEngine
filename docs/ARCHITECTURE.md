@@ -29,6 +29,12 @@ material reactions ──────┘             │
 Commands will be ordered by tick, player, and sequence before application.
 That ordering is part of the determinism contract.
 
+Hosts use `meat2d::core::FixedTimestep` to convert variable render-frame
+durations into a bounded number of fixed simulation ticks. It reports an
+interpolation alpha for presentation between the last and current state and
+explicitly reports when excess elapsed time was discarded after a stall; game
+logic must never use the render clock as authoritative state.
+
 ## Game scenes
 
 Ordinary game actors live in `meat2d::scene::Scene`, separate from the cellular
