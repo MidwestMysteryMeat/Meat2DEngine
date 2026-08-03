@@ -13,6 +13,10 @@ Meat2D is designed around four constraints:
 The renderer, AI, networking, game rules, and ordinary scene entities are
 consumers of the engine core. They do not own authoritative cellular state.
 
+Authoritative extensions use `meat2d::DeterministicRng` rather than platform or
+time-based randomness. Its bounded uniform draws use rejection sampling, and
+its nonzero state can be serialized or included in a replay contract.
+
 ## State flow
 
 ```text

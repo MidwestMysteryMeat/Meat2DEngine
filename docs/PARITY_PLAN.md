@@ -149,6 +149,8 @@ the editor without manually editing generated engine code.
 Status: planned
 
 - [ ] Stable C++20 API remains the primary low-level interface.
+- [x] Deterministic bounded RNG primitive for authoritative gameplay and
+      sandboxed script hooks.
 - [ ] Versioned C ABI for bindings.
 - [ ] Sandboxed Lua gameplay/mod API.
 - [ ] Deterministic RNG and command-only authoritative mutations.

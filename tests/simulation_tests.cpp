@@ -3,6 +3,7 @@
 #include "meat2d/assets/SpriteSheet.hpp"
 #include "meat2d/assets/TileMap.hpp"
 #include "meat2d/assets/TextureAtlas.hpp"
+#include "meat2d/core/DeterministicRng.hpp"
 #include "meat2d/core/FixedTimestep.hpp"
 #include "meat2d/input/Input.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
@@ -86,6 +87,29 @@ void test_fixed_timestep_accumulator() {
     const auto negative = clock.advance(std::chrono::milliseconds(-1));
     check(negative.steps == 0U && negative.interpolation_alpha == 0.0,
           "fixed timestep accepted negative elapsed time");
+}
+
+void test_deterministic_rng() {
+    meat2d::DeterministicRng first(0x12345678ULL);
+    meat2d::DeterministicRng second(0x12345678ULL);
+    check(first.state() == second.state(), "deterministic RNG did not retain its seed");
+    for (int index = 0; index < 128; ++index) {
+        check(first.next_u64() == second.next_u64(),
+              "equivalent deterministic RNG streams diverged");
+        const auto first_bounded = first.uniform(7U);
+        const auto second_bounded = second.uniform(7U);
+        const auto first_zero = first.uniform(0U);
+        const auto second_zero = second.uniform(0U);
+        check(first_bounded == second_bounded && first_bounded < 7U && first_zero == 0U &&
+                  second_zero == 0U,
+              "deterministic RNG returned an out-of-range bounded value");
+    }
+    meat2d::DeterministicRng probabilities(1U);
+    check(!probabilities.chance(0U, 10U) && probabilities.chance(10U, 10U) &&
+              !probabilities.chance(1U, 0U),
+          "deterministic RNG chance bounds were not enforced");
+    first.reseed(0U);
+    check(first.state() != 0U, "deterministic RNG accepted an all-zero state");
 }
 
 void test_scene_stack_transitions() {
@@ -2876,6 +2900,7 @@ int main() {
     try {
         test_cell_layout_and_protocol();
         test_fixed_timestep_accumulator();
+        test_deterministic_rng();
         test_scene_stack_transitions();
         test_scene_history_undo_redo();
         test_scene_diffs();
