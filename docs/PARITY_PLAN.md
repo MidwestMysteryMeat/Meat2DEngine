@@ -86,6 +86,8 @@ Status: **in progress**
 - [x] Bounded snapshot-backed scene undo/redo with branch invalidation.
 - [x] Deterministic entity-level scene diffs for editor and replication seams.
 - [x] Bounded hash-checked scene snapshots for autosave, prefabs, and transport.
+- [x] Cross-scene prefab/template subtree instantiation with fresh IDs and
+      preserved local data.
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
@@ -125,7 +127,7 @@ Status: planned
 - [ ] Scene tree and visual viewport.
 - [ ] Component inspector and property editing.
 - [ ] Drag-and-drop asset import and terrain/tilemap painting.
-- [ ] Prefabs and overrides.
+- [x] Prefab/template subtree instantiation; editor-managed overrides remain.
 - [x] Undo/redo, bounded autosave snapshots, and deterministic scene diffs.
 - [ ] Collision-shape and animation editors.
 - [ ] Play-in-editor, hot reload, and live network-session testing.

@@ -467,6 +467,68 @@ std::optional<EntityId> Scene::duplicate_subtree(EntityId source, EntityId paren
     return copied_root == invalid_entity ? std::nullopt : std::optional<EntityId>(copied_root);
 }
 
+std::optional<EntityId> Scene::instantiate_subtree(const Scene& source_scene, EntityId source,
+                                                   EntityId parent, std::string name) {
+    if (source_scene.find(source) == nullptr ||
+        (parent != invalid_entity && find(parent) == nullptr) ||
+        (&source_scene == this && parent != invalid_entity && is_in_subtree(parent, source))) {
+        return std::nullopt;
+    }
+
+    // Copy the source values before creating anything. The destination may
+    // be the same scene, and create_entity() can reallocate its entity list.
+    std::vector<Entity> source_entities;
+    for (const auto& entity : source_scene.entities_) {
+        if (source_scene.is_in_subtree(entity.id, source)) {
+            source_entities.push_back(entity);
+        }
+    }
+    if (source_entities.empty()) {
+        return std::nullopt;
+    }
+
+    std::vector<std::pair<EntityId, EntityId>> mapping;
+    mapping.reserve(source_entities.size());
+    EntityId copied_root = invalid_entity;
+    for (const auto& original : source_entities) {
+        const auto new_name = original.id == source && !name.empty() ? name : original.name;
+        const auto new_id = create_entity(new_name);
+        if (new_id == invalid_entity) {
+            return std::nullopt;
+        }
+        auto* copy = find(new_id);
+        if (copy == nullptr) {
+            return std::nullopt;
+        }
+        copy->enabled = original.enabled;
+        copy->tags = original.tags;
+        copy->transform = original.transform;
+        copy->sprite = original.sprite;
+        copy->collider = original.collider;
+        copy->rigid_body = original.rigid_body;
+        mapping.emplace_back(original.id, new_id);
+        if (original.id == source) {
+            copied_root = new_id;
+        }
+    }
+
+    for (std::size_t index = 0; index < source_entities.size(); ++index) {
+        const auto& original = source_entities[index];
+        EntityId desired_parent = original.id == source ? parent : invalid_entity;
+        if (original.id != source) {
+            const auto mapped_parent = std::find_if(
+                mapping.begin(), mapping.end(), [&original](const auto& value) {
+                    return value.first == original.parent;
+                });
+            desired_parent = mapped_parent == mapping.end() ? invalid_entity : mapped_parent->second;
+        }
+        if (!set_parent(mapping[index].second, desired_parent)) {
+            return std::nullopt;
+        }
+    }
+    return copied_root == invalid_entity ? std::nullopt : std::optional<EntityId>(copied_root);
+}
+
 bool Scene::hierarchy_valid() const noexcept {
     for (const auto& entity : entities_) {
         EntityId cursor = entity.parent;

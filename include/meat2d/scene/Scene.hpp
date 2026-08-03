@@ -157,6 +157,14 @@ class Scene {
     [[nodiscard]] std::optional<EntityId> duplicate_subtree(
         EntityId source, EntityId parent = invalid_entity, std::string name = {});
 
+    // Instantiates a subtree from another scene with fresh IDs. Local
+    // transforms, tags, components, enabled state, and internal hierarchy are
+    // preserved; the copied root is attached to the requested destination
+    // parent. This is the runtime foundation for prefab/template instances.
+    [[nodiscard]] std::optional<EntityId> instantiate_subtree(
+        const Scene& source_scene, EntityId source,
+        EntityId parent = invalid_entity, std::string name = {});
+
     [[nodiscard]] std::span<const SceneEvent> events() const noexcept;
     void clear_events() noexcept;
 

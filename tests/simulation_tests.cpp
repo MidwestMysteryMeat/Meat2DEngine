@@ -383,6 +383,43 @@ void test_scene_hierarchy_and_tags() {
               scene.events().front().type == meat2d::scene::SceneEventType::EntityCreated &&
               scene.events().back().type == meat2d::scene::SceneEventType::ParentChanged,
           "subtree duplication did not emit deterministic lifecycle events");
+
+    meat2d::scene::Scene prefab("player-prefab");
+    const auto prefab_root = prefab.create_entity("Player");
+    const auto prefab_weapon = prefab.create_entity("Weapon");
+    check(prefab.add_transform(prefab_root, {.position = {7, 9}, .scale = {2, 2}}) != nullptr &&
+              prefab.add_sprite(prefab_root, {.asset_id = 42, .layer = 5}) != nullptr &&
+              prefab.add_tag(prefab_root, "player") && prefab.add_collider(prefab_weapon) != nullptr &&
+              prefab.set_parent(prefab_weapon, prefab_root),
+          "prefab source scene could not be prepared");
+    prefab.find(prefab_root)->enabled = false;
+    meat2d::scene::Scene destination("level");
+    const auto spawn = destination.create_entity("Spawn");
+    destination.clear_events();
+    const auto instance = destination.instantiate_subtree(prefab, prefab_root, spawn, "Hero");
+    check(instance.has_value() && destination.entities().size() == 3U,
+          "scene could not instantiate a cross-scene prefab subtree");
+    if (instance) {
+        const auto* copied = destination.find(*instance);
+        const auto copied_weapon_it = std::find_if(
+            destination.entities().begin(), destination.entities().end(),
+            [instance](const auto& entity) { return entity.parent == *instance; });
+        const auto* copied_weapon = copied_weapon_it == destination.entities().end()
+                                        ? nullptr
+                                        : &*copied_weapon_it;
+        check(copied != nullptr && copied_weapon != nullptr && copied->name == "Hero" &&
+                  !copied->enabled && copied->transform == prefab.find(prefab_root)->transform &&
+                  copied->sprite == prefab.find(prefab_root)->sprite && copied->tags ==
+                      prefab.find(prefab_root)->tags && destination.parent_of(*instance) == spawn &&
+                  destination.parent_of(copied_weapon->id) == *instance &&
+                  destination.world_position(*instance) == meat2d::Vec2i{7, 9},
+              "prefab instance did not preserve components, hierarchy, or local transform");
+    }
+    check(destination.instantiate_subtree(prefab, 999U).has_value() == false &&
+              destination.instantiate_subtree(prefab, prefab_root, 999U).has_value() == false,
+          "prefab instantiation accepted invalid source or destination entities");
+    check(!scene.instantiate_subtree(scene, root, grandchild).has_value(),
+          "same-scene prefab instantiation accepted a cyclic destination parent");
     scene.clear_events();
     check(scene.add_sprite(root) != nullptr && scene.remove_sprite(root) &&
               scene.add_tag(root, "zeta") && scene.remove_tag(root, "zeta") &&
