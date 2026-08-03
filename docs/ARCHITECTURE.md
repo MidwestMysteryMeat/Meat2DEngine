@@ -49,6 +49,10 @@ Scenes expose a bounded ordered event stream for entity lifecycle, parenting,
 component, and tag changes. `duplicate_subtree()` copies an entity hierarchy
 with fresh IDs and preserved local components/tags, providing a small runtime
 primitive for prefabs, room instances, unit groups, and editor duplication.
+`instantiate_subtree()` applies the same composition across scene boundaries,
+and `SceneOverride` records let editor tooling change instance fields or remove
+components in validated, stable entity-ID order. Override batches validate the
+complete proposed parent graph before mutation, preventing partial cyclic edits.
 Destroying an entity removes its complete hierarchy in deterministic post-order
 so no surviving entity can retain a dangling parent reference.
 

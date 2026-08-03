@@ -91,7 +91,7 @@ Status: **in progress**
 - [x] Reusable bounded fixed-timestep accumulator with interpolation alpha.
 - [ ] Full rigid-body solver, audio, UI,
       and script components.
-- [ ] Editor-managed prefab overrides.
+- [x] Editor-managed prefab overrides with validated deterministic batches.
 - [x] Fixed simulation tick accumulator with interpolated rendering contract.
 - [ ] Deterministic serialization for all networked components.
 
@@ -127,7 +127,7 @@ Status: planned
 - [ ] Scene tree and visual viewport.
 - [ ] Component inspector and property editing.
 - [ ] Drag-and-drop asset import and terrain/tilemap painting.
-- [x] Prefab/template subtree instantiation; editor-managed overrides remain.
+- [x] Prefab/template subtree instantiation and editor-managed overrides.
 - [x] Undo/redo, bounded autosave snapshots, and deterministic scene diffs.
 - [ ] Collision-shape and animation editors.
 - [ ] Play-in-editor, hot reload, and live network-session testing.

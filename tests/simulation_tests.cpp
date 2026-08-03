@@ -420,6 +420,47 @@ void test_scene_hierarchy_and_tags() {
           "prefab instantiation accepted invalid source or destination entities");
     check(!scene.instantiate_subtree(scene, root, grandchild).has_value(),
           "same-scene prefab instantiation accepted a cyclic destination parent");
+    meat2d::scene::SceneOverride override_data{};
+    override_data.entity = instance.value_or(meat2d::scene::invalid_entity);
+    override_data.name = "Champion";
+    override_data.enabled = true;
+    override_data.parent = meat2d::scene::invalid_entity;
+    override_data.tags = std::vector<std::string>{"hero", "selectable"};
+    override_data.transform = meat2d::scene::Transform{{20, 30}, {1, 1}};
+    override_data.sprite = std::optional<meat2d::scene::Sprite>{};
+    destination.clear_events();
+    check(instance && destination.apply_override(override_data),
+          "scene rejected a valid editor-managed prefab override");
+    if (instance) {
+        const auto* overridden = destination.find(*instance);
+        check(overridden != nullptr && overridden->name == "Champion" && overridden->enabled &&
+                  overridden->parent == meat2d::scene::invalid_entity &&
+                  overridden->tags == std::vector<std::string>{"hero", "selectable"} &&
+                  overridden->transform == meat2d::scene::Transform{{20, 30}, {1, 1}} &&
+                  !overridden->sprite,
+              "editor-managed override did not update or clear requested fields");
+    }
+    const auto before_invalid_override = destination.state_hash();
+    meat2d::scene::SceneOverride invalid_override{};
+    invalid_override.entity = 999U;
+    invalid_override.tags = std::vector<std::string>{"duplicate", "duplicate"};
+    check(!destination.apply_override(invalid_override) &&
+              destination.state_hash() == before_invalid_override,
+          "invalid editor override partially modified the scene");
+    meat2d::scene::Scene cycle_scene("override-cycle");
+    const auto cycle_a = cycle_scene.create_entity("A");
+    const auto cycle_b = cycle_scene.create_entity("B");
+    std::vector<meat2d::scene::SceneOverride> cycle_overrides(2U);
+    cycle_overrides[0].entity = cycle_a;
+    cycle_overrides[0].parent = cycle_b;
+    cycle_overrides[1].entity = cycle_b;
+    cycle_overrides[1].parent = cycle_a;
+    const auto before_cycle_override = cycle_scene.state_hash();
+    check(!cycle_scene.apply_overrides(cycle_overrides) &&
+              cycle_scene.state_hash() == before_cycle_override &&
+              cycle_scene.parent_of(cycle_a) == meat2d::scene::invalid_entity &&
+              cycle_scene.parent_of(cycle_b) == meat2d::scene::invalid_entity,
+          "override batch accepted a cycle or partially applied it");
     scene.clear_events();
     check(scene.add_sprite(root) != nullptr && scene.remove_sprite(root) &&
               scene.add_tag(root, "zeta") && scene.remove_tag(root, "zeta") &&

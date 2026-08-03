@@ -529,6 +529,134 @@ std::optional<EntityId> Scene::instantiate_subtree(const Scene& source_scene, En
     return copied_root == invalid_entity ? std::nullopt : std::optional<EntityId>(copied_root);
 }
 
+bool Scene::apply_override(const SceneOverride& scene_override) {
+    return apply_overrides(std::span<const SceneOverride>(&scene_override, 1U));
+}
+
+bool Scene::apply_overrides(std::span<const SceneOverride> scene_overrides) {
+    std::vector<std::size_t> order;
+    order.reserve(scene_overrides.size());
+    for (std::size_t index = 0; index < scene_overrides.size(); ++index) {
+        const auto& scene_override = scene_overrides[index];
+        const auto* entity = find(scene_override.entity);
+        if (entity == nullptr ||
+            std::find_if(order.begin(), order.end(), [&scene_overrides, &scene_override](
+                             std::size_t previous) {
+                return scene_overrides[previous].entity == scene_override.entity;
+            }) != order.end()) {
+            return false;
+        }
+        if (scene_override.parent &&
+            (*scene_override.parent != invalid_entity &&
+             find(*scene_override.parent) == nullptr)) {
+            return false;
+        }
+        if (scene_override.tags) {
+            if (scene_override.tags->size() > maximum_tags_per_entity ||
+                std::any_of(scene_override.tags->begin(), scene_override.tags->end(),
+                            [](const std::string& tag) { return !valid_tag_text(tag); })) {
+                return false;
+            }
+            auto tags = *scene_override.tags;
+            std::sort(tags.begin(), tags.end());
+            if (std::adjacent_find(tags.begin(), tags.end()) != tags.end()) {
+                return false;
+            }
+        }
+        order.push_back(index);
+    }
+    // Validate the complete proposed parent graph, not only each override
+    // against the current graph. This catches batches such as A -> B and
+    // B -> A before any field or lifecycle event is changed.
+    for (const auto index : order) {
+        const auto& scene_override = scene_overrides[index];
+        if (!scene_override.parent) {
+            continue;
+        }
+        EntityId cursor = *scene_override.parent;
+        for (std::size_t depth = 0; cursor != invalid_entity && depth <= entities_.size();
+             ++depth) {
+            if (cursor == scene_override.entity) {
+                return false;
+            }
+            const auto* ancestor = find(cursor);
+            if (ancestor == nullptr) {
+                return false;
+            }
+            const auto changed_parent = std::find_if(
+                scene_overrides.begin(), scene_overrides.end(), [cursor](const auto& candidate) {
+                    return candidate.entity == cursor && candidate.parent.has_value();
+                });
+            cursor = changed_parent == scene_overrides.end() ? ancestor->parent
+                                                              : *changed_parent->parent;
+        }
+        if (cursor != invalid_entity) {
+            return false;
+        }
+    }
+    std::sort(order.begin(), order.end(), [&scene_overrides](std::size_t left, std::size_t right) {
+        return scene_overrides[left].entity < scene_overrides[right].entity;
+    });
+
+    for (const auto index : order) {
+        const auto& scene_override = scene_overrides[index];
+        auto* entity = find(scene_override.entity);
+        if (scene_override.name) {
+            entity->name = *scene_override.name;
+        }
+        if (scene_override.enabled) {
+            entity->enabled = *scene_override.enabled;
+        }
+        if (scene_override.tags) {
+            const auto old_tags = entity->tags;
+            for (const auto& old_tag : old_tags) {
+                if (std::find(scene_override.tags->begin(), scene_override.tags->end(), old_tag) ==
+                    scene_override.tags->end()) {
+                    remove_tag(entity->id, old_tag);
+                }
+            }
+            for (const auto& new_tag : *scene_override.tags) {
+                if (std::find(old_tags.begin(), old_tags.end(), new_tag) == old_tags.end()) {
+                    add_tag(entity->id, new_tag);
+                }
+            }
+        }
+        if (scene_override.parent) {
+            set_parent(entity->id, *scene_override.parent);
+        }
+
+        if (scene_override.transform) {
+            if (*scene_override.transform) {
+                static_cast<void>(add_transform(entity->id, **scene_override.transform));
+            } else {
+                remove_transform(entity->id);
+            }
+        }
+        if (scene_override.sprite) {
+            if (*scene_override.sprite) {
+                static_cast<void>(add_sprite(entity->id, **scene_override.sprite));
+            } else {
+                remove_sprite(entity->id);
+            }
+        }
+        if (scene_override.collider) {
+            if (*scene_override.collider) {
+                static_cast<void>(add_collider(entity->id, **scene_override.collider));
+            } else {
+                remove_collider(entity->id);
+            }
+        }
+        if (scene_override.rigid_body) {
+            if (*scene_override.rigid_body) {
+                static_cast<void>(add_rigid_body(entity->id, **scene_override.rigid_body));
+            } else {
+                remove_rigid_body(entity->id);
+            }
+        }
+    }
+    return true;
+}
+
 bool Scene::hierarchy_valid() const noexcept {
     for (const auto& entity : entities_) {
         EntityId cursor = entity.parent;

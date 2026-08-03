@@ -102,6 +102,21 @@ struct Entity {
     friend bool operator==(const Entity&, const Entity&) = default;
 };
 
+// An editor/prefab instance override. Optional component fields use a nested
+// optional: disengaged outer value means "leave unchanged", while an engaged
+// empty inner value means "remove this component".
+struct SceneOverride {
+    EntityId entity{};
+    std::optional<std::string> name;
+    std::optional<bool> enabled;
+    std::optional<EntityId> parent;
+    std::optional<std::vector<std::string>> tags;
+    std::optional<std::optional<Transform>> transform;
+    std::optional<std::optional<Sprite>> sprite;
+    std::optional<std::optional<Collider>> collider;
+    std::optional<std::optional<RigidBody>> rigid_body;
+};
+
 class Scene {
   public:
     explicit Scene(std::string name = {});
@@ -164,6 +179,12 @@ class Scene {
     [[nodiscard]] std::optional<EntityId> instantiate_subtree(
         const Scene& source_scene, EntityId source,
         EntityId parent = invalid_entity, std::string name = {});
+
+    // Applies editor-managed overrides in stable entity-ID order. Validation
+    // happens before mutation, including tags, component clears, and parent
+    // cycles, so a rejected batch does not partially modify the scene.
+    bool apply_override(const SceneOverride& scene_override);
+    bool apply_overrides(std::span<const SceneOverride> scene_overrides);
 
     [[nodiscard]] std::span<const SceneEvent> events() const noexcept;
     void clear_events() noexcept;
