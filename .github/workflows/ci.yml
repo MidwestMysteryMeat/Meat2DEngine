@@ -86,7 +86,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, undefined]
+        include:
+          - sanitizer: address
+            preset: asan-headless
+          - sanitizer: undefined
+            preset: ubsan-headless
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -95,21 +99,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes clang cmake ninja-build
 
       - name: Configure
-        run: >-
-          cmake -S . -B build/${{ matrix.sanitizer }}-headless
-          -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_COMPILER=clang++
-          -DMEAT2D_SANITIZER=${{ matrix.sanitizer }}
-          -DMEAT2D_BUILD_CLIENT=OFF
-          -DMEAT2D_BUILD_LAUNCHER=OFF
-          -DMEAT2D_BUILD_EXAMPLES=OFF
-          -DMEAT2D_BUILD_SERVER=ON
-          -DMEAT2D_BUILD_TESTS=ON
-          -DMEAT2D_BUILD_BENCHMARKS=ON
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_CXX_COMPILER=clang++
 
       - name: Build
-        run: cmake --build build/${{ matrix.sanitizer }}-headless
+        run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Test
-        run: ctest --test-dir build/${{ matrix.sanitizer }}-headless --output-on-failure
+        run: ctest --preset ${{ matrix.preset }}
