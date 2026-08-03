@@ -1,4 +1,7 @@
 #include "meat2d/ai/LivingSimulation.hpp"
+#include "meat2d/ai/Crowd.hpp"
+#include "meat2d/ai/LearningAgent.hpp"
+#include "meat2d/ai/NeuralNetwork.hpp"
 #include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
 #include "meat2d/assets/TileMap.hpp"
@@ -759,6 +762,62 @@ void test_scene_editor_model() {
               editor.scene().find(front)->name == "Selected Front" && editor.selected() == front,
           "scene editor override history did not undo and redo selection edits");
     check(!editor.select(999U), "scene editor selected an unknown entity");
+}
+
+void test_neural_network_and_learning_agents() {
+    const auto scale = meat2d::ai::neural_fixed_scale;
+    meat2d::ai::FixedNeuralNetwork network;
+    check(network.set_layers({
+              {.input_units = 2,
+               .output_units = 3,
+               .weights = {scale, 0, 0, scale, -scale, -scale},
+               .biases = {0, 0, 0},
+               .activation = meat2d::ai::NeuralActivation::ReLU},
+          }),
+          "fixed neural network rejected a valid bounded model");
+    const std::vector<std::int32_t> observation{2 * scale, scale};
+    const auto output = network.infer(observation);
+    check(output && output->size() == 3U && (*output)[0] == 2 * scale &&
+              (*output)[1] == scale && (*output)[2] == 0,
+          "fixed neural network inference was not deterministic fixed-point output");
+    const auto network_hash = network.state_hash();
+    meat2d::ai::MachineLearningAgent agent(7U, 1U);
+    check(agent.set_policy(std::move(network), 3U), "ML agent rejected a valid policy");
+    agent.begin_tick();
+    check(agent.decide(observation) == 0U && !agent.decide(observation).has_value() &&
+              agent.decisions_this_tick() == 1U,
+          "ML agent did not enforce deterministic action selection and decision budget");
+    agent.record_reward(5);
+    check(agent.total_reward() == 5 && agent.state_hash() != network_hash,
+          "ML agent did not retain bounded reward state");
+    check(!agent.set_policy(meat2d::ai::FixedNeuralNetwork{}, 0U),
+          "ML agent accepted an invalid empty policy");
+}
+
+void test_deterministic_crowds() {
+    meat2d::ai::CrowdSimulation first(4U);
+    meat2d::ai::CrowdSimulation second(4U);
+    const meat2d::ai::CrowdAgent agent_two{
+        .id = 2, .position = {1, 1}, .target = {8, 1}, .max_step = 1,
+        .separation_radius = 2, .enabled = true};
+    const meat2d::ai::CrowdAgent agent_one{
+        .id = 1, .position = {0, 1}, .target = {8, 1}, .max_step = 1,
+        .separation_radius = 2, .enabled = true};
+    meat2d::ai::CrowdAgent duplicate{};
+    duplicate.id = 1;
+    check(first.add_agent(agent_two) && first.add_agent(agent_one) &&
+              second.add_agent(agent_one) && second.add_agent(agent_two) &&
+              !first.add_agent(duplicate),
+          "crowd simulation did not enforce stable IDs and bounded capacity");
+    const auto first_step = first.step({0, 0, 4, 4});
+    const auto second_step = second.step({0, 0, 4, 4});
+    check(first_step.moved > 0U && first.state_hash() == second.state_hash() &&
+              first.agents().front().id == 1U && first.agents().back().id == 2U &&
+              first.find(1U)->position.x <= 3 && first.find(2U)->position.x <= 3,
+          "crowd agents were not deterministic, sorted, or bounds-safe");
+    check(first_step.moved == second_step.moved && first.set_target(1U, {0, 0}) &&
+              first.remove_agent(2U) && !first.remove_agent(2U),
+          "crowd target and removal operations were not deterministic");
 }
 
 void test_input_state_and_action_map() {
@@ -2914,6 +2973,8 @@ int main() {
         test_collision_layers_and_debug_draw();
         test_sprite_batch();
         test_scene_editor_model();
+        test_neural_network_and_learning_agents();
+        test_deterministic_crowds();
         test_input_state_and_action_map();
         test_camera_transforms_and_clamping();
         test_animation_playback_and_camera_source();

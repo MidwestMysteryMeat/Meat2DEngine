@@ -28,6 +28,11 @@ editor, selectable game-type starters, and one-command packaging.
 - Tick-ordered entity command buffer shared by autonomous and external control
 - Utility-driven grazers, predators, and workers with needs, danger response,
   resource use, combat, hauling, construction, and reproduction
+- Bounded deterministic crowd steering with stable agent IDs, target seeking,
+  local separation, and world bounds
+- Fixed-point neural-network inference and budgeted machine-learning agents
+  with deterministic action selection and reward state; training remains an
+  external pipeline
 - Eight-byte cellular organisms with encoded traits, metabolism, environmental
   fitness, motility, digestion, reproduction, and mutation
 - Seeded traversal that avoids a permanent left/right bias
@@ -68,6 +73,9 @@ editor, selectable game-type starters, and one-command packaging.
   background build, test, package, and GitHub publishing actions
 - Editor-hosted test sessions with one-click local hosting and direct, LAN, or
   public-directory joins
+- MCP-ready editor/tooling boundary for controlled scene inspection, project
+  automation, and AI-assisted workflows; MCP transport remains optional and
+  outside authoritative gameplay
 
 ## Build
 

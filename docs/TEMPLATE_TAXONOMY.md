@@ -22,6 +22,22 @@ These are capability families, not promises to reproduce a particular
 commercial game. A project can start from one family and combine systems from
 another without forking the engine.
 
+## Optional AI and tooling systems
+
+These capabilities cut across starter families rather than creating separate
+genres:
+
+- **AI crowds:** bounded deterministic target steering, local separation, stable
+  IDs, and room/world bounds for civilians, enemies, RTS units, and crowds.
+- **Machine-learning agents:** fixed-point neural inference, observation/action
+  policies, deterministic tie-breaking, reward tracking, and per-tick decision
+  budgets. Training, replay datasets, and model export happen outside the
+  runtime.
+- **MCP tooling:** an optional Model Context Protocol bridge for editor-safe
+  scene inspection, asset/project queries, test execution, and explicitly
+  authorized mutations. It must never bypass server authority or expose raw
+  filesystem/network access to gameplay agents.
+
 ## Production/parity gate
 
 Meat2D is production/parity ready when every starter can use the same public

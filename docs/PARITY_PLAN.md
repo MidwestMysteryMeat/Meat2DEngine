@@ -151,11 +151,16 @@ Status: planned
 - [ ] Stable C++20 API remains the primary low-level interface.
 - [x] Deterministic bounded RNG primitive for authoritative gameplay and
       sandboxed script hooks.
+- [x] Fixed-point inference-only neural-network models with bounded layers.
+- [x] Budgeted machine-learning agents with deterministic action selection and
+      reward state.
+- [x] Stable-ID deterministic crowd steering with separation and bounds.
 - [ ] Versioned C ABI for bindings.
 - [ ] Sandboxed Lua gameplay/mod API.
 - [ ] Deterministic RNG and command-only authoritative mutations.
 - [ ] Script budgets, serialization, replay tests, and API documentation.
 - [ ] Rust/C# bindings after the C ABI is stable.
+- [ ] Optional sandboxed MCP tooling bridge for editor/project automation.
 
 Acceptance gate: a scripted sample has identical authoritative hashes across
 server, replay, and supported client configurations.
@@ -197,6 +202,8 @@ authoritative state, not only the cellular World.
 Status: planned
 
 - [ ] Beginner tutorial and one-hour game guide.
+- [ ] AI crowd, neural-policy, and MCP tooling examples with threat-model and
+      permission documentation.
 - [ ] Multiplayer, platformer, destructible-terrain, cellular-roguelite,
       sandbox-survival, RPG, and modding samples.
 - [ ] API reference, architecture diagrams, security policy, and contribution

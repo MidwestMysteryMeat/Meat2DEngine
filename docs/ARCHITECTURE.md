@@ -17,6 +17,25 @@ Authoritative extensions use `meat2d::DeterministicRng` rather than platform or
 time-based randomness. Its bounded uniform draws use rejection sampling, and
 its nonzero state can be serialized or included in a replay contract.
 
+## AI, machine learning, and MCP
+
+`ai::CrowdSimulation` handles bounded integer target steering and local
+separation for large groups with stable ID ordering. It is separate from the
+cellular `LivingSimulation`, so RTS units, civilians, enemies, and sandbox
+populations can use it without inheriting material simulation costs.
+
+`ai::FixedNeuralNetwork` is an inference-only fixed-point model surface, and
+`ai::MachineLearningAgent` wraps it with observation/action selection,
+deterministic tie-breaking, reward accumulation, and per-tick decision budgets.
+Model training and export are external so authoritative servers do not depend
+on Python, GPUs, or nondeterministic floating-point training runtimes.
+
+MCP is an optional tooling integration, not an in-game authority. A future MCP
+bridge may expose read-only project, scene, asset, test, and build tools plus
+explicitly approved editor mutations. It must be sandboxed, audited, bounded,
+and unable to bypass multiplayer validation or directly access arbitrary files,
+processes, or network sockets.
+
 ## State flow
 
 ```text
