@@ -1,18 +1,27 @@
 #include <meat2d/ai/LivingSimulation.hpp>
+#include <meat2d/net/Session.hpp>
 #include <meat2d/render/WorldView.hpp>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <span>
+#include <string_view>
 
 namespace {
 
 constexpr double fixed_seconds = 1.0 / 60.0;
+
+std::uint16_t parse_port(const char* text, std::uint16_t fallback) {
+    std::uint16_t port = fallback;
+    const auto result = std::from_chars(text, text + std::char_traits<char>::length(text), port);
+    return result.ec == std::errc{} ? port : fallback;
+}
 
 bool passable(const meat2d::World& world, meat2d::Vec2i position) {
     if (!world.in_bounds(position)) {
@@ -73,10 +82,21 @@ void draw_player(std::span<std::uint8_t> pixels, const meat2d::World& world,
 
 } // namespace
 
-int main(int, char**) {
+int main(int argc, char** argv) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         std::fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
         return 1;
+    }
+
+    meat2d::net::AuthoritativeClient client;
+    bool networked = argc >= 3 && std::string_view(argv[1]) == "--connect";
+    if (networked && !client.connect(
+                         {.address = argv[2],
+                          .port = argc >= 4 ? parse_port(argv[3], meat2d::net::default_port)
+                                            : meat2d::net::default_port},
+                         "Top-down Commander")) {
+        std::fprintf(stderr, "Connection start failed: %s\n", client.last_error().data());
+        networked = false;
     }
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -124,6 +144,12 @@ int main(int, char**) {
         accumulator += std::min(0.25, std::chrono::duration<double>(now - previous).count());
         previous = now;
         while (accumulator >= fixed_seconds) {
+            if (networked) {
+                client.update();
+                if (client.connected()) {
+                    client.set_focus(player);
+                }
+            }
             const auto* keys = SDL_GetKeyboardState(nullptr);
             const meat2d::Vec2i direction{
                 (keys[SDL_SCANCODE_D] ? 1 : 0) - (keys[SDL_SCANCODE_A] ? 1 : 0),
@@ -179,6 +205,7 @@ int main(int, char**) {
     }
 
     SDL_DestroyTexture(texture);
+    client.disconnect();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

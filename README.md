@@ -62,7 +62,7 @@ editor, selectable game-type starters, and one-command packaging.
 - Graphical project editor with guarded code/config editing, native asset
   import, external-change detection, PNG/JPEG preview, sprite-sheet grids, and
   animation metadata
-- Side-scroller, action-platformer, top-down, top-down RTS, RPG, visual-novel,
+- Side-scroller/action-platformer, top-down/RTS, RPG, visual-novel,
   destructible-artillery, cellular-roguelite, falling-sand, and sandbox-survival
   starters plus
   background build, test, package, and GitHub publishing actions

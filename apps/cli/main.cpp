@@ -11,7 +11,7 @@ namespace {
 
 void print_usage() {
     std::cout << "Meat2D project tools\n\n"
-              << "  meat2d new NAME [--directory PATH] [--template side|top|rts|metroidvania|castlevania|visual-novel|rpg|artillery|cellular-roguelite|falling-sand|sandbox-survival]\n"
+              << "  meat2d new NAME [--directory PATH] [--template side|top|metroidvania|visual-novel|rpg|artillery|cellular-roguelite|falling-sand|sandbox-survival]\n"
               << "  meat2d build PATH [--release]\n"
               << "  meat2d run PATH\n"
               << "  meat2d package PATH\n"
@@ -37,7 +37,7 @@ int run_doctor(const std::filesystem::path& templates) {
               << "templates: " << (templates.empty() ? "NOT FOUND" : templates.string()) << '\n'
               << "ninja: " << (ninja.empty() ? "not available" : ninja) << '\n';
     bool healthy = !templates.empty() && !ninja.empty();
-    for (const auto executable : {cmake, std::string("git"), std::string("gh")}) {
+    for (const auto& executable : {cmake, std::string("git"), std::string("gh")}) {
         const auto result = meat2d::tools::run_process({executable, "--version"});
         std::cout << executable << ": " << (result.success() ? "ready" : "not available") << '\n';
         if (executable != "gh") {
@@ -90,11 +90,11 @@ int main(int argc, char** argv) {
                 } else if (choice == "top" || choice == "top-down") {
                     options.project_template = meat2d::tools::ProjectTemplate::TopDown;
                 } else if (choice == "rts" || choice == "top-down-rts" || choice == "top_down_rts") {
-                    options.project_template = meat2d::tools::ProjectTemplate::TopDownRts;
+                    options.project_template = meat2d::tools::ProjectTemplate::TopDown;
                 } else if (choice == "metroidvania") {
                     options.project_template = meat2d::tools::ProjectTemplate::Metroidvania;
                 } else if (choice == "castlevania") {
-                    options.project_template = meat2d::tools::ProjectTemplate::Castlevania;
+                    options.project_template = meat2d::tools::ProjectTemplate::SideScroller;
                 } else if (choice == "visual-novel" || choice == "visual_novel" ||
                            choice == "vn") {
                     options.project_template = meat2d::tools::ProjectTemplate::VisualNovel;
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
                     options.project_template = meat2d::tools::ProjectTemplate::FallingSand;
                 } else {
                     std::cerr << "Unknown template: " << choice
-                              << " (choose side, top, rts, metroidvania, castlevania, visual-novel, rpg, artillery, cellular-roguelite, falling-sand, or sandbox-survival)\n";
+                              << " (choose side, top, metroidvania, visual-novel, rpg, artillery, cellular-roguelite, falling-sand, or sandbox-survival; rts and castlevania are aliases)\n";
                     return 1;
                 }
             } else if (argument == "--engine-tag" && index + 1 < argc) {

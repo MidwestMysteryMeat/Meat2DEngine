@@ -9,10 +9,8 @@ and networking expectations for a genre.
 
 | Starter | Covers | First systems it should demonstrate |
 | --- | --- | --- |
-| Side scroller | platformers, run-and-gun, arcade action | fixed tick, kinematic movement, camera, animation |
-| Action platformer | Castlevania-style room exploration and combat | room transitions, gates, hitboxes, checkpoints |
-| Top-down | action adventure, twin-stick, dungeon games | 8-way movement, camera, interaction, projectiles |
-| Top-down RTS | multiplayer strategy and tactics | authoritative commands, units, economy, fog-of-war seam |
+| Side scroller / action platformer | platformers, run-and-gun, arcade action, Castlevania-style rooms | fixed tick, kinematic movement, camera, animation, combat/room seam |
+| Top-down / RTS | action adventure, twin-stick, dungeon games, multiplayer strategy | 8-way movement, camera, interaction, authoritative commands, units/economy seam |
 | RPG | turn-based or real-time party games | inventory, dialogue, quests, encounters, save data |
 | Visual novel | dialogue-first and branching narrative games | story state, choices, localization, portraits, save slots |
 | Destructible artillery | Liero/Worms-like games | deterministic terrain edits, weapons, rounds, replay |

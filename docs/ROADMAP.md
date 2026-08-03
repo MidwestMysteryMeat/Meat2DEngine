@@ -40,9 +40,9 @@
 
 - [x] Public client/rendering library target
 - [x] `meat2d new` starter-game scaffolder
-- [ ] Selectable side-scroller, action-platformer, top-down, top-down RTS, RPG,
-      visual novel, destructible-artillery, cellular-roguelite, falling-sand,
-      and sandbox-survival starter templates
+- [ ] Selectable side-scroller/action-platformer, top-down/RTS, RPG, visual
+      novel, destructible-artillery, cellular-roguelite, falling-sand, and
+      sandbox-survival starter templates
 - [x] Asset and settings manifests
 - [x] Graphical project editor with a root-confined code/asset browser
 - [x] PNG/JPEG preview and sprite-sheet animation manager

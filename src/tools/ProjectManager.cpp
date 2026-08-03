@@ -89,12 +89,8 @@ std::string_view template_directory(ProjectTemplate project_template) {
         return "side_scroller";
     case ProjectTemplate::TopDown:
         return "top_down";
-    case ProjectTemplate::TopDownRts:
-        return "top_down_rts";
     case ProjectTemplate::Metroidvania:
         return "metroidvania";
-    case ProjectTemplate::Castlevania:
-        return "castlevania";
     case ProjectTemplate::VisualNovel:
         return "visual_novel";
     case ProjectTemplate::Rpg:
@@ -169,9 +165,7 @@ std::filesystem::path locate_template_root(const std::filesystem::path& executab
         if (!error && std::filesystem::is_directory(candidate / "common", error) &&
             std::filesystem::is_directory(candidate / "side_scroller", error) &&
             std::filesystem::is_directory(candidate / "top_down", error) &&
-            std::filesystem::is_directory(candidate / "top_down_rts", error) &&
             std::filesystem::is_directory(candidate / "metroidvania", error) &&
-            std::filesystem::is_directory(candidate / "castlevania", error) &&
             std::filesystem::is_directory(candidate / "visual_novel", error) &&
             std::filesystem::is_directory(candidate / "rpg", error) &&
             std::filesystem::is_directory(candidate / "destructible_artillery", error) &&
@@ -283,9 +277,7 @@ bool ProjectManager::templates_available() const noexcept {
     return std::filesystem::is_directory(template_root_ / "common", error) &&
            std::filesystem::is_directory(template_root_ / "side_scroller", error) &&
            std::filesystem::is_directory(template_root_ / "top_down", error) &&
-           std::filesystem::is_directory(template_root_ / "top_down_rts", error) &&
            std::filesystem::is_directory(template_root_ / "metroidvania", error) &&
-           std::filesystem::is_directory(template_root_ / "castlevania", error) &&
            std::filesystem::is_directory(template_root_ / "visual_novel", error) &&
            std::filesystem::is_directory(template_root_ / "rpg", error) &&
            std::filesystem::is_directory(template_root_ / "destructible_artillery", error) &&
@@ -335,7 +327,7 @@ ToolResult ProjectManager::create_project(const NewProjectOptions& options) cons
     if (variant.empty()) {
         return {
             .summary = "Project template is invalid",
-            .details = "Choose side, top, rts, metroidvania, castlevania, visual-novel, rpg, or falling-sand.",
+            .details = "Choose side, top, metroidvania, visual-novel, rpg, artillery, cellular-roguelite, falling-sand, or sandbox-survival.",
         };
     }
     result = copy_template_tree(template_root_ / std::filesystem::path(variant), options.directory,

@@ -1179,12 +1179,10 @@ void test_project_manager_validation_and_templates() {
                                                "build.yml"),
           "generated starter omitted code, presets, or publishing workflow");
 
-    const std::array<meat2d::tools::ProjectTemplate, 11> project_templates{
+    const std::array<meat2d::tools::ProjectTemplate, 9> project_templates{
         meat2d::tools::ProjectTemplate::SideScroller,
         meat2d::tools::ProjectTemplate::TopDown,
-        meat2d::tools::ProjectTemplate::TopDownRts,
         meat2d::tools::ProjectTemplate::Metroidvania,
-        meat2d::tools::ProjectTemplate::Castlevania,
         meat2d::tools::ProjectTemplate::VisualNovel,
         meat2d::tools::ProjectTemplate::Rpg,
         meat2d::tools::ProjectTemplate::DestructibleArtillery,

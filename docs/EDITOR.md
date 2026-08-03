@@ -15,10 +15,10 @@ meat2d_launcher
 
 The welcome screen lets you choose a game-type starter:
 
-- side-scroller, with platform movement and paintable simulation;
-- top-down, with four-direction movement and a simulation arena;
-- metroidvania/action-platformer, with side-view traversal and platform layout;
-- top-down RTS, with multiplayer-first unit-command structure;
+- side-scroller/action-platformer, with platform movement, combat/room seams,
+  and paintable simulation;
+- top-down/RTS, with four-direction movement, simulation arena, and
+  multiplayer-first unit-command structure;
 - RPG and visual novel, with authored progression or dialogue state;
 - destructible artillery, cellular roguelite, falling-sand, and sandbox
   survival, with increasingly simulation-heavy world defaults;

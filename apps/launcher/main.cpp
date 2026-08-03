@@ -1062,7 +1062,7 @@ void draw_start(EditorState& state, SDL_Window* window) {
     ImGui::TextDisabled("%s", meat2d::version_string.data());
     ImGui::SeparatorText("Create a game");
     ImGui::TextWrapped(
-        "Choose a C++ starter for a side-scroller, action-platformer, top-down game, RTS, visual novel, RPG, destructible artillery, cellular roguelite, falling-sand, or sandbox-survival project.");
+        "Choose a C++ starter for a side-scroller/action-platformer, top-down/RTS game, metroidvania, visual novel, RPG, destructible artillery, cellular roguelite, falling-sand, or sandbox-survival project.");
     ImGui::InputText("Project name", &state.new_name);
     ImGui::SetNextItemWidth(-90.0F);
     ImGui::InputText("Destination", &state.new_directory);
@@ -1070,10 +1070,10 @@ void draw_start(EditorState& state, SDL_Window* window) {
     if (ImGui::Button("Browse##new")) {
         SDL_ShowOpenFolderDialog(new_project_folder_callback, nullptr, window, nullptr, false);
     }
-    const char* templates[] = {"Side scroller", "Top-down game", "Top-down RTS", "Metroidvania",
-                               "Castlevania-style", "Visual novel", "RPG", "Destructible artillery",
-                               "Cellular roguelite", "Falling sand", "Sandbox survival"};
-    ImGui::Combo("Game type", &state.new_template, templates, 11);
+    const char* templates[] = {"Side scroller / action platformer", "Top-down / RTS", "Metroidvania",
+                               "Visual novel", "RPG", "Destructible artillery", "Cellular roguelite",
+                               "Falling sand", "Sandbox survival"};
+    ImGui::Combo("Game type", &state.new_template, templates, 9);
     if (ImGui::Button("Create and open", {160.0F, 0.0F})) {
         const auto result = state.manager.create_project({
             .name = state.new_name,
@@ -1086,20 +1086,16 @@ void draw_start(EditorState& state, SDL_Window* window) {
                 case 1:
                     return ProjectTemplate::TopDown;
                 case 2:
-                    return ProjectTemplate::TopDownRts;
-                case 3:
                     return ProjectTemplate::Metroidvania;
-                case 4:
-                    return ProjectTemplate::Castlevania;
-                case 5:
+                case 3:
                     return ProjectTemplate::VisualNovel;
-                case 6:
+                case 4:
                     return ProjectTemplate::Rpg;
-                case 7:
+                case 5:
                     return ProjectTemplate::DestructibleArtillery;
-                case 8:
+                case 6:
                     return ProjectTemplate::CellularRoguelite;
-                case 9:
+                case 7:
                     return ProjectTemplate::FallingSand;
                 default:
                     return ProjectTemplate::SandboxSurvival;

@@ -57,9 +57,9 @@ Status: **in progress**
 - [ ] Add release tags, changelog, migration notes, generated API docs,
       checksums, and an SBOM.
 - [x] Correct product positioning and expose independent genre selectors.
-- [ ] Cover side-scroller, action-platformer, top-down, top-down RTS, RPG,
-      visual novel, destructible artillery, cellular roguelite, falling-sand,
-      and sandbox-survival starters.
+- [ ] Cover side-scroller/action-platformer, top-down/RTS, RPG, visual novel,
+      destructible artillery, cellular roguelite, falling-sand, and
+      sandbox-survival starters.
 
 Acceptance gate: a clean checkout builds, tests, installs, packages, and is
 consumed by `tests/package_consumer` on supported CI platforms.

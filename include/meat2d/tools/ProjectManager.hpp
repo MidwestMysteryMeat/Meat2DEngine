@@ -16,9 +16,7 @@ locate_template_root(const std::filesystem::path& executable_path = {});
 enum class ProjectTemplate {
     SideScroller,
     TopDown,
-    TopDownRts,
     Metroidvania,
-    Castlevania,
     VisualNovel,
     Rpg,
     DestructibleArtillery,
