@@ -73,9 +73,9 @@ editor, selectable game-type starters, and one-command packaging.
   background build, test, package, and GitHub publishing actions
 - Editor-hosted test sessions with one-click local hosting and direct, LAN, or
   public-directory joins
-- MCP-ready editor/tooling boundary for controlled scene inspection, project
-  automation, and AI-assisted workflows; MCP transport remains optional and
-  outside authoritative gameplay
+- Transport-neutral MCP editor/tooling gateway for authenticated scene
+  discovery, inspection, and consent-gated edits; protocol transport remains
+  optional and outside authoritative gameplay
 
 ## Build
 

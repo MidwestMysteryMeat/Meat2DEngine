@@ -155,12 +155,15 @@ Status: planned
 - [x] Budgeted machine-learning agents with deterministic action selection and
       reward state.
 - [x] Stable-ID deterministic crowd steering with separation and bounds.
+- [x] Transport-neutral MCP gateway with capability-token authentication,
+      discovery, bounded scene reads, and consent-gated editor writes.
 - [ ] Versioned C ABI for bindings.
 - [ ] Sandboxed Lua gameplay/mod API.
 - [ ] Deterministic RNG and command-only authoritative mutations.
 - [ ] Script budgets, serialization, replay tests, and API documentation.
 - [ ] Rust/C# bindings after the C ABI is stable.
-- [ ] Optional sandboxed MCP tooling bridge for editor/project automation.
+- [ ] Loopback-only stdio/Streamable HTTP MCP adapters with per-session rate
+      limits, request correlation, audit events, and capability scopes.
 
 Acceptance gate: a scripted sample has identical authoritative hashes across
 server, replay, and supported client configurations.

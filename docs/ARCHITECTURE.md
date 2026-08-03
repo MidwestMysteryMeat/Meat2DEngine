@@ -30,11 +30,12 @@ deterministic tie-breaking, reward accumulation, and per-tick decision budgets.
 Model training and export are external so authoritative servers do not depend
 on Python, GPUs, or nondeterministic floating-point training runtimes.
 
-MCP is an optional tooling integration, not an in-game authority. A future MCP
-bridge may expose read-only project, scene, asset, test, and build tools plus
-explicitly approved editor mutations. It must be sandboxed, audited, bounded,
-and unable to bypass multiplayer validation or directly access arbitrary files,
-processes, or network sockets.
+MCP is an optional tooling integration, not an in-game authority. The current
+`tools::McpGateway` provides authenticated, discovery-first scene inspection
+and consent-gated edits. Future transport adapters may expose project, asset,
+test, and build tools, but must remain sandboxed, audited, bounded, and unable
+to bypass multiplayer validation or directly access arbitrary files, processes,
+or network sockets.
 
 ## State flow
 

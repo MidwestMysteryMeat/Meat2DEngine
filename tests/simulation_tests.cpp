@@ -35,6 +35,7 @@
 #include "meat2d/tools/ProjectBrowser.hpp"
 #include "meat2d/tools/ProjectManager.hpp"
 #include "meat2d/tools/SceneEditor.hpp"
+#include "meat2d/tools/McpGateway.hpp"
 
 #include <algorithm>
 #include <array>
@@ -818,6 +819,37 @@ void test_deterministic_crowds() {
     check(first_step.moved == second_step.moved && first.set_target(1U, {0, 0}) &&
               first.remove_agent(2U) && !first.remove_agent(2U),
           "crowd target and removal operations were not deterministic");
+}
+
+void test_mcp_gateway_safety_and_discovery() {
+    meat2d::scene::Scene initial("MCP Test Scene");
+    const auto actor = initial.create_entity("Actor");
+    meat2d::tools::SceneEditor editor(std::move(initial), 4U);
+    meat2d::tools::McpGateway gateway(editor, "capability-token");
+
+    check(!gateway.authenticate("wrong") && gateway.authenticate("capability-token") &&
+              meat2d::tools::McpGateway::constant_time_equal("same", "same") &&
+              !meat2d::tools::McpGateway::constant_time_equal("same", "other"),
+          "MCP gateway did not enforce capability-token authentication");
+    check(!gateway.search("scene", "wrong").success &&
+              gateway.search("scene", "capability-token").tools.size() == 1U &&
+              gateway.describe("scene", "capability-token").tools.front().actions.size() == 6U,
+          "MCP gateway discovery did not use authenticated bounded descriptors");
+    check(gateway.execute("scene", "inspect", {}, "capability-token").success &&
+              gateway.execute("scene", "list_entities", {}, "capability-token").payload.find(
+                  "Actor") != std::string::npos,
+          "MCP gateway could not perform authenticated read-only scene inspection");
+    check(!gateway.execute("scene", "select", "entity=1", "capability-token").success &&
+              gateway.execute("scene", "select", "entity=" + std::to_string(actor),
+                              "capability-token", "write")
+                      .success &&
+              editor.selected() == actor,
+          "MCP gateway allowed unsafe mutation without explicit write consent");
+    check(!gateway.execute("scene", "select", "entity=bad", "capability-token", "write").success &&
+              gateway.configure("scene", false, "capability-token", "write").success &&
+              !gateway.execute("scene", "inspect", {}, "capability-token").success &&
+              gateway.configure("scene", true, "capability-token", "write").success,
+          "MCP gateway did not enforce bounded parameters and tool configuration");
 }
 
 void test_input_state_and_action_map() {
@@ -2975,6 +3007,7 @@ int main() {
         test_scene_editor_model();
         test_neural_network_and_learning_agents();
         test_deterministic_crowds();
+        test_mcp_gateway_safety_and_discovery();
         test_input_state_and_action_map();
         test_camera_transforms_and_clamping();
         test_animation_playback_and_camera_source();

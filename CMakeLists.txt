@@ -142,6 +142,7 @@ add_library(
     src/tools/Process.cpp
     src/tools/ProjectBrowser.cpp
     src/tools/ProjectManager.cpp
+    src/tools/McpGateway.cpp
     src/tools/SceneEditor.cpp
 )
 add_library(Meat2D::Tools ALIAS meat2d_tools)
