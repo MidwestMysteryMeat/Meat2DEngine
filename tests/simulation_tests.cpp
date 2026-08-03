@@ -1,6 +1,7 @@
 #include "meat2d/ai/LivingSimulation.hpp"
 #include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
+#include "meat2d/assets/TileMap.hpp"
 #include "meat2d/input/Input.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
 #include "meat2d/net/Discovery.hpp"
@@ -220,6 +221,44 @@ void test_scene_hierarchy_and_tags() {
               decoded->world_position(grandchild) == meat2d::Vec2i{115, 62} &&
               decoded->has_tag(child, "actors"),
           "scene hierarchy and tags did not survive serialization");
+}
+
+void test_tile_map_content_and_serialization() {
+    meat2d::assets::TileMap map(8, 4, 2);
+    check(map.width() == 8 && map.height() == 4 && map.layer_count() == 2,
+          "tile map did not create its requested dimensions and layers");
+    check(map.define_tile({.id = 1, .atlas_source = {0, 0, 16, 16}, .solid = true}) &&
+              map.define_tile({.id = 2, .atlas_source = {16, 0, 16, 16}, .solid = false}),
+          "tile map rejected valid tile definitions");
+    check(map.add_layer("Actors", 10, true), "tile map rejected a valid extra layer");
+    check(map.layer_count() == 3U && map.layer_info(2) != nullptr &&
+              map.layer_info(2)->name == "Actors",
+          "tile map lost its extra layer metadata");
+    check(map.set_tile(0, {2, 1}, 1) && map.set_tile(0, {3, 1}, 2) &&
+              map.set_tile(1, {4, 2}, 1) && map.set_tile(2, {1, 1}, 2),
+          "tile map rejected valid tile writes");
+    check(!map.set_tile(0, {0, 0}, 99) && map.tile(0, {0, 0}) == meat2d::assets::empty_tile,
+          "tile map accepted an undefined tile ID");
+    const auto collisions = map.solid_cells(0, {1, 0, 4, 3});
+    check(collisions.size() == 1U && collisions.front() == meat2d::RectI{2, 1, 1, 1},
+          "tile map solid-cell query returned incorrect collision metadata");
+    const auto encoded = map.serialize();
+    const auto decoded = meat2d::assets::TileMap::deserialize(encoded);
+    check(decoded.has_value(), "tile map serialized data could not be decoded");
+    if (decoded) {
+        check(decoded->state_hash() == map.state_hash(),
+              "tile map state changed during serialization round trip");
+        check(decoded->tile(1, {4, 2}) == 1,
+              "tile map lost a layered tile during serialization round trip");
+    }
+    auto truncated = encoded;
+    truncated.pop_back();
+    check(!meat2d::assets::TileMap::deserialize(truncated).has_value(),
+          "truncated tile map data was accepted");
+    auto bad_magic = encoded;
+    bad_magic[0] = 'X';
+    check(!meat2d::assets::TileMap::deserialize(bad_magic).has_value(),
+          "tile map data with invalid magic was accepted");
 }
 
 void test_kinematic_scene_motion() {
@@ -2412,6 +2451,7 @@ int main() {
         test_cell_layout_and_protocol();
         test_scene_entity_components_and_hashing();
         test_scene_hierarchy_and_tags();
+        test_tile_map_content_and_serialization();
         test_scene_collision_queries();
         test_kinematic_scene_motion();
         test_rigid_body_step_and_particles();

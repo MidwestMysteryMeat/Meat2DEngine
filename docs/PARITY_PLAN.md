@@ -102,7 +102,8 @@ Status: planned
 - [ ] Keyboard, mouse, gamepad, and touch input with action maps and rebinding.
 - [ ] Audio playback, music, mixing, and spatial audio.
 - [ ] Runtime UI and debug console.
-- [ ] Tilemaps and collision metadata.
+- [x] Initial renderer-neutral tilemap layers, atlas metadata, solid-cell
+      queries, deterministic hashing, and versioned serialization.
 - [ ] Optional Box2D-backed rigid-body physics while preserving the deterministic
       terrain simulation as the authoritative substrate.
 

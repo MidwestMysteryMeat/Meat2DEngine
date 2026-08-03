@@ -71,6 +71,12 @@ floating-point state into the core simulation.
 is intentionally renderer-neutral so the SDL client, launcher, and headless
 diagnostics can choose their own visualization backend.
 
+`meat2d::assets::TileMap` is the first renderer-neutral conventional content
+system. It stores layered tile IDs, atlas source rectangles, visibility/z
+metadata, and solid collision definitions. Its `M2TM` document format and
+state hash are independent from SDL and the network packet protocol, so editor,
+game, server, and package-consumer code can share the same map asset.
+
 ## Cellular world
 
 The world is divided into 64×64 chunks. A chunk currently stores 4,096

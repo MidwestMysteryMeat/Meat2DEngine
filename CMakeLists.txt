@@ -44,6 +44,7 @@ add_library(
     meat2d_core
     STATIC
     src/assets/Animation.cpp
+    src/assets/TileMap.cpp
     src/assets/SpriteSheet.cpp
     src/ai/LivingSimulation.cpp
     src/input/Input.cpp
