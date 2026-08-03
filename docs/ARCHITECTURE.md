@@ -43,6 +43,8 @@ Scenes expose a bounded ordered event stream for entity lifecycle, parenting,
 component, and tag changes. `duplicate_subtree()` copies an entity hierarchy
 with fresh IDs and preserved local components/tags, providing a small runtime
 primitive for prefabs, room instances, unit groups, and editor duplication.
+Destroying an entity removes its complete hierarchy in deterministic post-order
+so no surviving entity can retain a dangling parent reference.
 
 Scene documents use a versioned little-endian `M2SC` format and are independent
 of the network packet protocol. `Scene::state_hash()` hashes serialized field

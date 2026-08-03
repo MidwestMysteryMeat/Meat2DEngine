@@ -241,6 +241,12 @@ void test_scene_hierarchy_and_tags() {
               scene.add_tag(root, "zeta") && scene.remove_tag(root, "zeta") &&
               scene.events().size() == 4U,
           "scene component and tag mutations did not emit events");
+    scene.clear_events();
+    check(copied_root && scene.destroy_entity(*copied_root) && scene.entities().size() == 3U &&
+              scene.events().size() == 3U &&
+              scene.events().front().type == meat2d::scene::SceneEventType::EntityDestroyed &&
+              scene.events().back().entity == *copied_root,
+          "destroying a scene parent did not remove its subtree safely");
 }
 
 void test_tile_map_content_and_serialization() {

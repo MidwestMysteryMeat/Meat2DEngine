@@ -90,6 +90,7 @@ class Scene {
     void clear() noexcept;
 
     [[nodiscard]] EntityId create_entity(std::string name = {});
+    // Destroys an entity and all descendants in deterministic post-order.
     bool destroy_entity(EntityId id);
 
     [[nodiscard]] Entity* find(EntityId id) noexcept;

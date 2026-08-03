@@ -201,14 +201,26 @@ EntityId Scene::create_entity(std::string name) {
 }
 
 bool Scene::destroy_entity(EntityId id) {
-    const auto iterator = std::find_if(
-        entities_.begin(), entities_.end(), [id](const Entity& entity) { return entity.id == id; });
-    if (iterator == entities_.end()) {
+    if (find(id) == nullptr) {
         return false;
     }
-    const auto parent = iterator->parent;
-    entities_.erase(iterator);
-    emit_event({.type = SceneEventType::EntityDestroyed, .entity = id, .related = parent, .tag = {}});
+
+    std::vector<std::pair<EntityId, EntityId>> destroyed;
+    for (const auto& entity : entities_) {
+        if (is_in_subtree(entity.id, id)) {
+            destroyed.emplace_back(entity.id, entity.parent);
+        }
+    }
+    entities_.erase(std::remove_if(entities_.begin(), entities_.end(), [this, id](const Entity& entity) {
+                        return is_in_subtree(entity.id, id);
+                    }),
+                    entities_.end());
+    for (auto iterator = destroyed.rbegin(); iterator != destroyed.rend(); ++iterator) {
+        emit_event({.type = SceneEventType::EntityDestroyed,
+                    .entity = iterator->first,
+                    .related = iterator->second,
+                    .tag = {}});
+    }
     return true;
 }
 
