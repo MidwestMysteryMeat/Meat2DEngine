@@ -128,6 +128,11 @@ asset/source rectangles and flips, and sorts by render layer then stable entity
 ID so SDL, OpenGL, or another backend can consume the same deterministic draw
 order.
 
+`meat2d::assets::TextureAtlasCache` validates relative sprite-sheet assets and
+image dimensions, resolves frame indices into source rectangles, bounds the
+catalog, and hashes entries by asset ID. Backends can use that catalog to own
+GPU texture handles separately from deterministic scene and asset metadata.
+
 ## Cellular world
 
 The world is divided into 64×64 chunks. A chunk currently stores 4,096

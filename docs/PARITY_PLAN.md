@@ -106,6 +106,8 @@ each sample implementing its own entity and scene framework.
 Status: planned
 
 - [ ] Texture/atlas cache.
+- [x] Validated bounded texture/atlas metadata cache with deterministic frame
+      resolution and content hashing.
 - [x] Bounded camera-culled backend-neutral sprite batching with deterministic
       layer/entity ordering.
 - [x] Backend-neutral keyboard/mouse input state and action bindings.

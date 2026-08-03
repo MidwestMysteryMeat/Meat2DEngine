@@ -46,6 +46,7 @@ add_library(
     src/assets/Animation.cpp
     src/assets/TileMap.cpp
     src/assets/SpriteSheet.cpp
+    src/assets/TextureAtlas.cpp
     src/ai/LivingSimulation.cpp
     src/input/Input.cpp
     src/life/OrganismField.cpp

@@ -2,6 +2,7 @@
 #include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
 #include "meat2d/assets/TileMap.hpp"
+#include "meat2d/assets/TextureAtlas.hpp"
 #include "meat2d/core/FixedTimestep.hpp"
 #include "meat2d/input/Input.hpp"
 #include "meat2d/net/ChunkCodec.hpp"
@@ -1658,6 +1659,34 @@ void test_sprite_sheet_metadata() {
           "sprite metadata treated a hash inside a string as a comment");
 }
 
+void test_texture_atlas_cache() {
+    const meat2d::assets::SpriteSheet sheet{
+        .image = "assets/player.png",
+        .frame_width = 16,
+        .frame_height = 16,
+        .margin = 0,
+        .spacing = 0,
+        .animations = {},
+    };
+    meat2d::assets::TextureAtlasCache first(2);
+    meat2d::assets::TextureAtlasCache second(2);
+    check(first.define(7, sheet, 32, 16) && second.define(8, sheet, 32, 16) &&
+              first.define(8, sheet, 32, 16) && second.define(7, sheet, 32, 16) &&
+              first.state_hash() == second.state_hash(),
+          "texture atlas cache hash depended on registration order");
+    const auto region = first.resolve(7, 1);
+    check(region && region->image == sheet.image && region->source == meat2d::RectI{16, 0, 16, 16},
+          "texture atlas cache did not resolve a validated frame rectangle");
+    const auto before_invalid = first.state_hash();
+    meat2d::assets::SpriteSheet unsafe{};
+    unsafe.image = "../unsafe.png";
+    check(!first.define(9, unsafe, 32, 16) &&
+              first.state_hash() == before_invalid && !first.resolve(999, 0).has_value(),
+          "texture atlas cache accepted unsafe or unknown content");
+    check(first.remove(8) && !first.remove(8) && first.size() == 1U,
+          "texture atlas cache remove semantics were not deterministic");
+}
+
 void test_authoritative_client_server_session() {
     meat2d::net::AuthoritativeServer server({
         .world =
@@ -2842,6 +2871,7 @@ int main() {
         test_project_browser_safety_and_editing();
         test_project_manager_validation_and_templates();
         test_sprite_sheet_metadata();
+        test_texture_atlas_cache();
         test_authoritative_client_server_session();
         test_prediction_and_reconciliation();
         test_organism_genome_and_ecology();
