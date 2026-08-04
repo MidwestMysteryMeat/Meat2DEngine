@@ -60,6 +60,7 @@ add_library(
     src/scene/Scene.cpp
     src/scene/SceneSerialization.cpp
     src/scene/ScenePatch.cpp
+    src/scene/SceneHierarchy.cpp
     src/scene/SceneHistory.cpp
     src/scene/SceneSnapshot.cpp
     src/scene/SceneStack.cpp
