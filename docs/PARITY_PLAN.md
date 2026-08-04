@@ -200,7 +200,7 @@ Status: planned
 
 - [ ] Persist agents, organisms, entities/components, projectiles, scripts, and
       session metadata.
-- [x] Crash-safe atomic chunk replacement with interrupted-write recovery;
+- [x] Crash-safe atomic chunk replacement and generation-manifest recovery;
       incremental snapshots remain.
 - [ ] Chunk streaming/unbounded-world addressing with explicit policy.
 - [ ] Save migrations and schema versioning.

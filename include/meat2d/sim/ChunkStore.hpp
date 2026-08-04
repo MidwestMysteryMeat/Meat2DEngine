@@ -7,10 +7,16 @@
 
 namespace meat2d {
 
-// Disk-backed chunk persistence for a fixed-size World: one file per chunk
-// under a directory, so a large world's cold regions don't have to stay
-// resident in memory between sessions, and a running server or editor can
-// save/restore state without serializing the whole grid at once.
+// Disk-backed chunk persistence for a fixed-size World: one file per chunk in
+// a committed generation under a directory, so a large world's cold regions
+// don't have to stay resident in memory between sessions, and a running
+// server or editor can save/restore state without serializing the whole grid
+// at once.
+//
+// `save_all` writes a new generation and replaces the current manifest only
+// after every chunk is complete. Interrupted manifest replacement recovers the
+// previous generation. Individual `save_chunk` calls update the active
+// generation when one exists, or use the legacy root layout otherwise.
 //
 // Scope: this persists chunks within a World's existing (column, row)
 // bounds — it does not extend the world's addressable area. An unbounded
@@ -22,9 +28,9 @@ class ChunkStore {
   public:
     explicit ChunkStore(std::filesystem::path directory);
 
-    // Writes every chunk in the world's grid to disk using a temporary file
-    // and atomic replacement. Returns the number of chunks written, or 0 if
-    // the directory could not be created.
+    // Writes every chunk in the world's grid into a new generation and commits
+    // it with an atomic manifest replacement. Returns the number of chunks
+    // written, or 0 if the generation could not be committed.
     std::size_t save_all(const World& world) const;
     bool save_chunk(const World& world, std::int32_t column, std::int32_t row) const;
 

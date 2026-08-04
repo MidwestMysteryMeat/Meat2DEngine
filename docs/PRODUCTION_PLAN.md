@@ -139,7 +139,9 @@ upgrade a sample on every supported platform.
 
 ## Immediate implementation queue
 
-1. Add a generation manifest and recovery tests around `ChunkStore`.
+1. Add a generation manifest and recovery tests around `ChunkStore`. (In
+   progress: atomic generation commit is implemented; entity/session state is
+   still outside the store.)
 2. Define and implement the first versioned session-state envelope without
    claiming that every subsystem is persisted before its codec exists.
 3. Add authoritative command recording hooks to replay.

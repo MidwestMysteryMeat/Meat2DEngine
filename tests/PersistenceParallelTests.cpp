@@ -199,17 +199,17 @@ void test_chunk_store_persistence_across_worlds() {
     check(saved == static_cast<std::size_t>(source.chunk_columns() * source.chunk_rows()),
           "save_all did not save every chunk");
     check(store.has_chunk(0, 0), "save_all did not create a file for chunk (0,0)");
-    check(!std::filesystem::exists(directory / "chunk_0_0.m2dchunk.tmp") &&
-              !std::filesystem::exists(directory / "chunk_0_0.m2dchunk.bak"),
-          "chunk save left an atomic-write staging file behind");
+    check(std::filesystem::exists(directory / "current.m2dmanifest") &&
+              !std::filesystem::exists(directory / ".generation_1.tmp"),
+          "chunk save did not commit a generation manifest atomically");
 
-    const auto chunk_file = directory / "chunk_0_0.m2dchunk";
-    const auto backup_file = directory / "chunk_0_0.m2dchunk.bak";
-    std::filesystem::rename(chunk_file, backup_file, error);
-    check(!error, "chunk persistence test could not create a recovery backup");
-    check(store.load_chunk(source, 0, 0) && std::filesystem::exists(chunk_file) &&
-              !std::filesystem::exists(backup_file),
-          "chunk loader did not recover an interrupted atomic replacement");
+    const auto manifest = directory / "current.m2dmanifest";
+    const auto manifest_backup = directory / "current.m2dmanifest.bak";
+    std::filesystem::rename(manifest, manifest_backup, error);
+    check(!error, "chunk persistence test could not create a manifest recovery backup");
+    check(store.load_chunk(source, 0, 0) && std::filesystem::exists(manifest) &&
+              !std::filesystem::exists(manifest_backup),
+          "chunk loader did not recover an interrupted generation commit");
 
     // A freshly constructed World, not the same instance that was stepped
     // and saved — this is the actual persistence scenario: reloading a
