@@ -123,16 +123,17 @@ has succeeded.
 
 - [x] Define the threat model and the client-key limitation.
 - [x] Define compression-before-encryption and signed-manifest ordering.
-- [ ] Select and pin libsodium or OpenSSL, including platform packages and
-      license notices.
+- [x] Select and pin libsodium 1.0.22 revision
+      `77e1ce5d6dee871c49ef211222ba18ef0c486bda`, including the ISC notice.
 - [ ] Review the API and format with a cryptography/security reviewer.
 
 ### Encryption 1 — authenticated blocks
 
-- [ ] Add versioned AEAD blocks with bounded sizes, key IDs, nonces, tags, and
+- [x] Add versioned AEAD blocks with bounded sizes, key IDs, nonces, tags, and
       AAD.
-- [ ] Add secure RNG, key-provider, zeroization, and failure contracts.
-- [ ] Add known-answer, tamper, wrong-key, fuzz, and allocation-budget tests.
+- [x] Add secure RNG, key generation, zeroization, and failure contracts.
+- [x] Add round-trip, tamper, wrong-key, wrong-AAD, truncation, and
+      allocation-budget tests; known-answer vectors and fuzzing remain.
 
 ### Encryption 2 — packages and saves
 

@@ -44,6 +44,9 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
 - Encryption and key-management policy is documented separately in
   [Encryption and key management](ENCRYPTION_PLAN.md); no cryptographic API is
   enabled until its key-ownership and dependency review is complete.
+- `meat2d/security/`: optional libsodium XChaCha20-Poly1305-IETF blocks with
+  bounded authenticated encryption; enable with `MEAT2D_ENABLE_SODIUM` after
+  supplying a reviewed libsodium installation.
 
 ## Compatibility rules
 

@@ -25,10 +25,13 @@ option(MEAT2D_ENABLE_INSTALL "Enable SDK/runtime installation and CPack" ON)
 option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(MEAT2D_COVERAGE "Enable GCC/Clang coverage instrumentation" OFF)
 option(MEAT2D_ENABLE_LZAV "Enable the pinned LZAV compression codec" ON)
+option(MEAT2D_ENABLE_SODIUM "Enable the optional libsodium AEAD security codec" OFF)
 
 set(MEAT2D_LZAV_SOURCE_DIR "" CACHE PATH "Existing LZAV source directory containing lzav.h")
 set(MEAT2D_LZAV_GIT_TAG "ebe3b58aea896e8ce6db6d7ddbb11dffced281e4" CACHE STRING
     "Pinned LZAV revision")
+set(MEAT2D_SODIUM_INCLUDE_DIR "" CACHE PATH "libsodium include directory containing sodium.h")
+set(MEAT2D_SODIUM_LIBRARY "" CACHE FILEPATH "libsodium library to link for AEAD support")
 
 if(MEAT2D_ENABLE_LZAV AND NOT MEAT2D_LZAV_SOURCE_DIR)
     include(FetchContent)
@@ -45,6 +48,19 @@ endif()
 
 if(MEAT2D_ENABLE_LZAV AND NOT EXISTS "${MEAT2D_LZAV_SOURCE_DIR}/lzav.h")
     message(FATAL_ERROR "MEAT2D_ENABLE_LZAV requires a source directory containing lzav.h")
+endif()
+
+if(MEAT2D_ENABLE_SODIUM)
+    if(NOT MEAT2D_SODIUM_INCLUDE_DIR)
+        find_path(MEAT2D_SODIUM_INCLUDE_DIR sodium.h)
+    endif()
+    if(NOT MEAT2D_SODIUM_LIBRARY)
+        find_library(MEAT2D_SODIUM_LIBRARY NAMES sodium libsodium)
+    endif()
+    if(NOT MEAT2D_SODIUM_INCLUDE_DIR OR NOT MEAT2D_SODIUM_LIBRARY)
+        message(FATAL_ERROR
+            "MEAT2D_ENABLE_SODIUM requires MEAT2D_SODIUM_INCLUDE_DIR and MEAT2D_SODIUM_LIBRARY")
+    endif()
 endif()
 
 set(MEAT2D_SANITIZER "" CACHE STRING "Sanitizer to enable: address, undefined, or thread")
@@ -75,6 +91,7 @@ add_library(
     STATIC
     src/core/Capi.cpp
     src/core/Compression.cpp
+    src/core/Crypto.cpp
     src/assets/Animation.cpp
     src/assets/TileMap.cpp
     src/assets/SpriteSheet.cpp
@@ -153,6 +170,11 @@ add_library(
 if(MEAT2D_ENABLE_LZAV)
     target_compile_definitions(meat2d_core PRIVATE MEAT2D_HAS_LZAV=1)
     target_include_directories(meat2d_core PRIVATE "${MEAT2D_LZAV_SOURCE_DIR}")
+endif()
+if(MEAT2D_ENABLE_SODIUM)
+    target_compile_definitions(meat2d_core PRIVATE MEAT2D_HAS_SODIUM=1)
+    target_include_directories(meat2d_core PRIVATE "${MEAT2D_SODIUM_INCLUDE_DIR}")
+    target_link_libraries(meat2d_core PRIVATE "${MEAT2D_SODIUM_LIBRARY}")
 endif()
 add_library(Meat2D::Render ALIAS meat2d_render)
 set_target_properties(meat2d_render PROPERTIES EXPORT_NAME Render)
@@ -439,6 +461,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
         tests/TestMain.cpp
         tests/TestSupport.cpp
         tests/CompressionTests.cpp
+        tests/CryptoTests.cpp
         tests/CoreFoundationTests.cpp
         tests/CoreContentTests.cpp
         tests/NetworkProtocolTests.cpp
@@ -452,6 +475,9 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
     if(MEAT2D_ENABLE_LZAV)
         target_compile_definitions(meat2d_tests PRIVATE MEAT2D_TEST_HAS_LZAV=1)
+    endif()
+    if(MEAT2D_ENABLE_SODIUM)
+        target_compile_definitions(meat2d_tests PRIVATE MEAT2D_TEST_HAS_SODIUM=1)
     endif()
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
     set_tests_properties(meat2d_tests PROPERTIES TIMEOUT 120)

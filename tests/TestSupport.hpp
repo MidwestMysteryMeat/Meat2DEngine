@@ -9,6 +9,7 @@ void check(bool condition, const std::string& message);
 
 void test_cell_layout_and_protocol();
 void test_compression_blocks();
+void test_crypto_blocks();
 void test_c_api_world_surface();
 void test_fixed_timestep_accumulator();
 void test_deterministic_rng();
