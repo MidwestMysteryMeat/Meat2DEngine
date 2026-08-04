@@ -197,6 +197,7 @@ add_library(
     src/net/PacketCodec.cpp
     src/net/Reliability.cpp
     src/net/Session.cpp
+    src/net/SessionClient.cpp
     src/net/UdpSocket.cpp
 )
 add_library(Meat2D::Net ALIAS meat2d_net)
