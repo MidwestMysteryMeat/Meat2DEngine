@@ -52,7 +52,7 @@ Status: **in progress**
 - [x] Add CTest timeout protection.
 - [x] Add GitHub Actions for Linux GCC/Clang, Windows MSVC, sanitizer builds,
       package installation, and package-consumer validation.
-- [ ] Add fuzz targets for packet, fragmentation, replay, sprite metadata, and
+- [x] Add fuzz targets for packet, fragmentation, replay, sprite metadata, and
       project-path parsing.
 - [ ] Add release tags, changelog, migration notes, generated API docs,
       checksums, and an SBOM.

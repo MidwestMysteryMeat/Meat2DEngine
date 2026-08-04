@@ -19,6 +19,7 @@ option(MEAT2D_BUILD_CLI "Build the project-management command-line tool" ON)
 option(MEAT2D_BUILD_LAUNCHER "Build the graphical project editor and launcher" ON)
 option(MEAT2D_BUILD_EXAMPLES "Build the example games" ON)
 option(MEAT2D_BUILD_TESTS "Build unit and determinism tests" ON)
+option(MEAT2D_BUILD_FUZZERS "Build optional Clang libFuzzer targets" OFF)
 option(MEAT2D_BUILD_BENCHMARKS "Build simulation benchmarks" ON)
 option(MEAT2D_ENABLE_INSTALL "Enable SDK/runtime installation and CPack" ON)
 option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
@@ -412,6 +413,43 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
     set_tests_properties(meat2d_tests PROPERTIES TIMEOUT 120)
+endif()
+
+if(MEAT2D_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "MEAT2D_BUILD_FUZZERS requires Clang with libFuzzer support")
+    endif()
+
+    set(MEAT2D_FUZZER_FLAGS -fsanitize=fuzzer,address -fno-omit-frame-pointer)
+    add_executable(meat2d_fuzz_packet tests/fuzz/packet_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_packet PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_packet PRIVATE Meat2D::Net)
+
+    add_executable(meat2d_fuzz_fragmentation tests/fuzz/fragmentation_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_fragmentation PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_fragmentation PRIVATE Meat2D::Net)
+
+    add_executable(meat2d_fuzz_replay tests/fuzz/replay_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_replay PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_replay PRIVATE Meat2D::Core)
+
+    add_executable(meat2d_fuzz_sprite_sheet tests/fuzz/sprite_sheet_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_sprite_sheet PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_sprite_sheet PRIVATE Meat2D::Core)
+
+    add_executable(meat2d_fuzz_project_path tests/fuzz/project_path_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_project_path PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_project_path PRIVATE Meat2D::Tools)
+
+    foreach(fuzzer IN ITEMS
+        meat2d_fuzz_packet
+        meat2d_fuzz_fragmentation
+        meat2d_fuzz_replay
+        meat2d_fuzz_sprite_sheet
+        meat2d_fuzz_project_path)
+        target_compile_options(${fuzzer} PRIVATE ${MEAT2D_FUZZER_FLAGS})
+        target_link_options(${fuzzer} PRIVATE ${MEAT2D_FUZZER_FLAGS})
+    endforeach()
 endif()
 
 if(MEAT2D_BUILD_BENCHMARKS)
