@@ -70,6 +70,7 @@ add_library(
     src/sim/World.cpp
     src/sim/WorldGrid.cpp
     src/sim/WorldDiagnostics.cpp
+    src/sim/WorldReactions.cpp
 )
 add_library(Meat2D::Core ALIAS meat2d_core)
 set_target_properties(meat2d_core PROPERTIES EXPORT_NAME Core)
