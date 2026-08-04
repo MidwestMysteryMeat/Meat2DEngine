@@ -348,4 +348,27 @@ void test_incompatible_client_build_is_rejected() {
     client.disconnect();
 }
 
+void test_client_lifecycle_budgets_are_configurable() {
+    meat2d::net::AuthoritativeClient client({
+        .maximum_datagrams_per_update = 1,
+        .handshake_timeout_updates = 2,
+        .server_timeout_updates = 2,
+        .keepalive_interval_updates = 1,
+        .prediction_expiry_updates = 1,
+    });
+    check(client.connect(
+              {
+                  .address = "localhost",
+                  .port = 1,
+              },
+              "Lifecycle Budget Test", 0xB17D2U),
+          "lifecycle budget test client failed to start connecting");
+    client.update();
+    client.update();
+    client.update();
+    check(client.state() == meat2d::net::ClientConnectionState::TimedOut,
+          "client lifecycle budget did not bound the handshake timeout");
+    client.disconnect();
+}
+
 } // namespace meat2d_tests

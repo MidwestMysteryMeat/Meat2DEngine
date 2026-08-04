@@ -45,6 +45,7 @@ int main() {
     test_prediction_and_reconciliation();
     test_security_budget_disconnects_abusive_client();
     test_incompatible_client_build_is_rejected();
+    test_client_lifecycle_budgets_are_configurable();
     test_organism_genome_and_ecology();
     test_organism_determinism_and_reproduction();
     test_material_catalog();

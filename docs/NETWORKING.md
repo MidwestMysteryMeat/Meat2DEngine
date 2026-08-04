@@ -133,6 +133,12 @@ reports `security_rejections` and `security_disconnects` in
 command growth from creating unbounded work, but are not cryptographic
 authentication or encrypted transport.
 
+Client receive and lifecycle work is bounded by `ClientConfig`: this includes
+the datagram receive budget, handshake and server silence timeouts, keepalive
+cadence, and prediction expiry. Values are clamped to safe nonzero ranges at
+construction so applications can select shorter windows for tests or longer
+windows for high-latency deployments without changing protocol behavior.
+
 ## Finding and hosting sessions
 
 `Meat2D::Net` also provides automatic LAN discovery, a paginated public server

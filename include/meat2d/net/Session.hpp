@@ -162,6 +162,14 @@ enum class ClientConnectionState : std::uint8_t {
     TimedOut
 };
 
+struct ClientConfig {
+    std::size_t maximum_datagrams_per_update{256};
+    std::uint32_t handshake_timeout_updates{600};
+    std::uint32_t server_timeout_updates{600};
+    std::uint32_t keepalive_interval_updates{60};
+    std::uint32_t prediction_expiry_updates{600};
+};
+
 struct ClientUpdateStats {
     std::uint32_t datagrams_received{};
     std::uint32_t datagrams_sent{};
@@ -175,7 +183,7 @@ struct ClientUpdateStats {
 
 class AuthoritativeClient {
   public:
-    AuthoritativeClient();
+    explicit AuthoritativeClient(ClientConfig config = {});
     ~AuthoritativeClient();
     AuthoritativeClient(const AuthoritativeClient&) = delete;
     AuthoritativeClient& operator=(const AuthoritativeClient&) = delete;
@@ -226,6 +234,7 @@ class AuthoritativeClient {
     std::uint32_t reapply_predictions(RectI chunk_rect);
     [[nodiscard]] std::uint32_t next_target_tick() const noexcept;
 
+    ClientConfig config_;
     UdpSocket socket_;
     Endpoint server_;
     std::optional<Endpoint> directory_;

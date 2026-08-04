@@ -36,7 +36,18 @@ std::uint64_t make_nonce() noexcept {
 
 } // namespace
 
-AuthoritativeClient::AuthoritativeClient() = default;
+AuthoritativeClient::AuthoritativeClient(ClientConfig config) : config_(config) {
+    config_.maximum_datagrams_per_update =
+        std::clamp<std::size_t>(config_.maximum_datagrams_per_update, 1U, 4'096U);
+    config_.handshake_timeout_updates =
+        std::max<std::uint32_t>(1U, config_.handshake_timeout_updates);
+    config_.server_timeout_updates =
+        std::max<std::uint32_t>(1U, config_.server_timeout_updates);
+    config_.keepalive_interval_updates =
+        std::max<std::uint32_t>(1U, config_.keepalive_interval_updates);
+    config_.prediction_expiry_updates =
+        std::max<std::uint32_t>(1U, config_.prediction_expiry_updates);
+}
 
 AuthoritativeClient::~AuthoritativeClient() {
     disconnect();
@@ -193,12 +204,12 @@ ClientUpdateStats AuthoritativeClient::update() {
     poll_datagrams(stats);
     flush_channel(stats);
     if (state_ == ClientConnectionState::Connecting && directory_ && server_.port == 0U &&
-        network_update_ % 60U == 0U) {
+        network_update_ % config_.keepalive_interval_updates == 0U) {
         if (send_directory_join()) {
             ++stats.datagrams_sent;
         }
     }
-    if (connected() && network_update_ % 60U == 0U) {
+    if (connected() && network_update_ % config_.keepalive_interval_updates == 0U) {
         const auto server_tick =
             latest_snapshot_ ? latest_snapshot_->server_tick : welcome_->server_tick;
         const auto heartbeat = channel_.make_acknowledgement(network_update_, server_tick);
@@ -206,15 +217,16 @@ ClientUpdateStats AuthoritativeClient::update() {
     }
     fragments_.expire(network_update_);
     std::erase_if(predicted_paints_, [this](const PredictedPaint& prediction) {
-        return network_update_ - prediction.created_update > 600U;
+        return network_update_ - prediction.created_update > config_.prediction_expiry_updates;
     });
     if (state_ == ClientConnectionState::Connected &&
-        network_update_ - last_server_update_ > 600U) {
+        network_update_ - last_server_update_ > config_.server_timeout_updates) {
         state_ = ClientConnectionState::TimedOut;
         socket_.close();
         last_error_ = "server timed out";
     }
-    if (state_ == ClientConnectionState::Connecting && network_update_ > 600U) {
+    if (state_ == ClientConnectionState::Connecting &&
+        network_update_ > config_.handshake_timeout_updates) {
         state_ = ClientConnectionState::TimedOut;
         socket_.close();
         last_error_ =
@@ -360,7 +372,7 @@ std::string_view AuthoritativeClient::last_error() const noexcept {
 }
 
 void AuthoritativeClient::poll_datagrams(ClientUpdateStats& stats) {
-    for (std::size_t count = 0; count < 256U; ++count) {
+    for (std::size_t count = 0; count < config_.maximum_datagrams_per_update; ++count) {
         auto datagram = socket_.receive();
         if (!datagram) {
             break;
