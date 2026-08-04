@@ -34,6 +34,7 @@
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
+#include "meat2d/sim/WorldSnapshot.hpp"
 #include "meat2d/tools/ProjectBrowser.hpp"
 #include "meat2d/tools/ProjectManager.hpp"
 #include "meat2d/tools/SceneEditor.hpp"
@@ -256,6 +257,43 @@ void test_chunk_store_persistence_across_worlds() {
     check(!store.has_chunk(-1, -1), "has_chunk reported a file for an out-of-range chunk");
 
     std::filesystem::remove_all(directory, error);
+}
+
+void test_world_snapshot_round_trip_and_bounds() {
+    meat2d::World source({
+        .width = 96,
+        .height = 80,
+        .seed = 0x12345678U,
+        .sleep_after_ticks = 17,
+    });
+    meat2d::seed_elements_lab(source);
+    for (int tick = 0; tick < 12; ++tick) {
+        source.step();
+    }
+
+    const auto encoded = meat2d::persistence::encode_world(source);
+    check(!encoded.empty(), "world snapshot rejected a valid bounded world");
+    const auto restored = meat2d::persistence::decode_world(encoded);
+    check(restored.has_value(), "world snapshot did not decode its encoded state");
+    if (restored) {
+        check(restored->width() == source.width() && restored->height() == source.height() &&
+                  restored->seed() == source.seed() &&
+                  restored->sleep_after_ticks() == source.sleep_after_ticks() &&
+                  restored->current_tick() == source.current_tick() &&
+                  restored->state_hash() == source.state_hash(),
+              "world snapshot did not preserve authoritative world identity");
+    }
+
+    check(meat2d::persistence::encode_world(source, encoded.size() - 1U).empty(),
+          "world snapshot ignored its maximum byte bound");
+    auto truncated = encoded;
+    truncated.pop_back();
+    check(!meat2d::persistence::decode_world(truncated),
+          "world snapshot accepted truncated input");
+    auto unknown_version = encoded;
+    unknown_version[4] = 0xFFU;
+    check(!meat2d::persistence::decode_world(unknown_version),
+          "world snapshot accepted an unknown format version");
 }
 
 void test_parallel_step_deterministic_across_thread_counts() {

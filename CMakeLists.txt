@@ -78,6 +78,7 @@ add_library(
     src/sim/Projectile.cpp
     src/sim/Scenario.cpp
     src/sim/World.cpp
+    src/sim/WorldSnapshot.cpp
     src/sim/WorldGrid.cpp
     src/sim/WorldDiagnostics.cpp
     src/sim/WorldReactions.cpp

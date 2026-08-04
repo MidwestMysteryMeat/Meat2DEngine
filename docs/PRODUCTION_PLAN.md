@@ -142,8 +142,10 @@ upgrade a sample on every supported platform.
 1. Add a generation manifest and recovery tests around `ChunkStore`. (In
    progress: atomic generation commit is implemented; entity/session state is
    still outside the store.)
-2. Define and implement the first versioned session-state envelope without
-   claiming that every subsystem is persisted before its codec exists.
+2. Define and implement the first versioned session-state envelope by
+   composing the world snapshot, scene serialization, and subsystem metadata
+   codecs without claiming that every subsystem is persisted before its codec
+   exists.
 3. Add authoritative command recording hooks to replay.
 4. Add security/replication acceptance tests before introducing encryption or
    relay complexity.

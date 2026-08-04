@@ -323,6 +323,14 @@ Cell& World::cell_unchecked(Vec2i position) noexcept {
 const Cell& World::cell_unchecked(Vec2i position) const noexcept {
     return chunks_[chunk_index(position)].cells[local_index(position)];
 }
+
+void World::restore_tick(Tick tick) noexcept {
+    tick_ = tick;
+}
+
+std::uint16_t World::sleep_after_ticks() const noexcept {
+    return config_.sleep_after_ticks;
+}
 std::uint8_t World::initial_state(MaterialId material_id) const noexcept {
     switch (material_id) {
     case MaterialId::Fire:

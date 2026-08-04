@@ -40,6 +40,10 @@ class World {
     [[nodiscard]] std::int32_t width() const noexcept;
     [[nodiscard]] std::int32_t height() const noexcept;
     [[nodiscard]] Tick current_tick() const noexcept;
+    [[nodiscard]] std::uint16_t sleep_after_ticks() const noexcept;
+    // Restores the authoritative tick after a validated persistence decode.
+    // Callers should not use this to rewind a live simulation arbitrarily.
+    void restore_tick(Tick tick) noexcept;
     [[nodiscard]] std::uint64_t seed() const noexcept;
     [[nodiscard]] bool in_bounds(Vec2i position) const noexcept;
 
