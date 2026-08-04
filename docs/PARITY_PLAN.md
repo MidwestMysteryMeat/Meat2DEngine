@@ -50,7 +50,7 @@ Status: **in progress**
 - [x] Add selectable AddressSanitizer/UndefinedBehaviorSanitizer/ThreadSanitizer
       CMake configuration.
 - [x] Add CTest timeout protection.
-- [ ] Add GitHub Actions for Linux GCC/Clang, Windows MSVC, sanitizer builds,
+- [x] Add GitHub Actions for Linux GCC/Clang, Windows MSVC, sanitizer builds,
       package installation, and package-consumer validation.
 - [ ] Add fuzz targets for packet, fragmentation, replay, sprite metadata, and
       project-path parsing.
