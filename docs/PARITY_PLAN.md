@@ -210,6 +210,8 @@ Status: planned
       incremental snapshots remain.
 - [ ] Chunk streaming/unbounded-world addressing with explicit policy.
 - [ ] Save migrations and schema versioning.
+- [ ] Codec-neutral compression for package assets, save chunks, and streamed
+      blocks with bounded decompression and raw fallback.
 - [ ] Full authoritative command/state replay and replay visualization.
 - [ ] Cross-version compatibility tests.
 
@@ -233,6 +235,8 @@ Status: planned
 - [ ] API reference, architecture diagrams, security policy, and contribution
       templates.
 - [ ] Windows/Linux/macOS packages, package-manager recipes, and binary SDKs.
+- [ ] Reproducible compressed asset packages with third-party notices, codec
+      version metadata, and compression regression benchmarks.
 - [ ] Stable release cadence and documented compatibility policy.
 
 Acceptance gate: a first-time contributor can build, test, document, and ship a

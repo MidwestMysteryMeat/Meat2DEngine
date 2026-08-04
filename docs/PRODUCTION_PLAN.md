@@ -57,6 +57,8 @@ gaps.
    support.
 8. Tutorials, security policy, compatibility policy, crash-reporting guidance,
    and a predictable release cadence.
+9. Compression and packed-asset infrastructure with bounded decompression,
+   save/network integration, licensing, and migration policy.
 
 The engine is production-capable for scoped deterministic 2D projects,
 templates, simulations, and early multiplayer prototypes. It should not yet
@@ -152,6 +154,9 @@ upgrade a sample on every supported platform.
    relay complexity.
 5. Build audio/UI/platform adapters and one production-quality sample per
    broad template family.
+6. Define the codec-neutral compression contract and benchmark LZAV against
+   raw storage and other candidates before integrating it. See
+   [Compression and packed assets](COMPRESSION_PLAN.md).
 
 Every completed item must include public API documentation, focused tests, a
 CI path where practical, and a clear limitation note when the implementation
