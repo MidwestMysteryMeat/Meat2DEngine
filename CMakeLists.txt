@@ -58,6 +58,7 @@ add_library(
     src/replay/Replay.cpp
     src/scene/Scene.cpp
     src/scene/SceneSerialization.cpp
+    src/scene/ScenePatch.cpp
     src/scene/SceneHistory.cpp
     src/scene/SceneSnapshot.cpp
     src/scene/SceneStack.cpp
