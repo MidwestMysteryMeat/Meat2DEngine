@@ -152,6 +152,7 @@ add_library(
     src/tools/Process.cpp
     src/tools/ProjectBrowser.cpp
     src/tools/ProjectManager.cpp
+    src/tools/ProjectManagerTemplates.cpp
     src/tools/McpGateway.cpp
     src/tools/SceneEditor.cpp
 )
