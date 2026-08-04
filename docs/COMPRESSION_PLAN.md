@@ -68,9 +68,10 @@ simulation subsystem.
 
 ### Compression 0 — contract and benchmark
 
-- [ ] Add the codec interface, envelope schema, size limits, and error codes.
-- [ ] Add a third-party notice/pinning policy and record the selected LZAV
-      version only after review.
+- [x] Add the codec interface, envelope schema, size limits, and failure
+      behavior for bounded raw/LZAV blocks.
+- [x] Add a third-party notice/pinning policy and pin LZAV revision
+      `ebe3b58aea896e8ce6db6d7ddbb11dffced281e4`; benchmark selection remains.
 - [ ] Benchmark raw, LZAV, and no-compression paths on scene files, tile maps,
       JSON/TOML metadata, world chunks, snapshots, and incompressible data.
 - [ ] Define thresholds where storing raw data is cheaper or faster.

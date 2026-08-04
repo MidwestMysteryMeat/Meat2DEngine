@@ -39,6 +39,8 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
 - `meat2d/ai/` and `meat2d/life/`: optional living simulation and agent systems.
 - `meat2d/c_api.h`: versioned exception-free C ABI for the bounded World subset;
   see [C ABI](C_API.md).
+- `meat2d/compression/`: bounded raw/LZAV blocks with versioned envelopes,
+  checksums, and decompression limits; see [Compression and packed assets](COMPRESSION_PLAN.md).
 
 ## Compatibility rules
 
