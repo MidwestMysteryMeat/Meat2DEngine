@@ -188,7 +188,10 @@ Status: planned
 - [ ] Late join, baseline snapshots, reconnection, and session resume.
 - [ ] Entity interest management, interpolation, and lag simulation.
 - [ ] Authenticated/encrypted sessions and protocol version negotiation.
-- [ ] Rate limits, packet budgets, abuse controls, and observability.
+- [x] Bounded datagram/input/invalid-packet budgets with security rejection and
+      disconnect diagnostics.
+- [ ] Authentication, encryption, broader rate-limit policy, and production
+      observability export.
 - [ ] Authenticated relay fallback for restrictive NAT.
 
 Acceptance gate: packet loss, reordering, latency, reconnects, and direct-to-

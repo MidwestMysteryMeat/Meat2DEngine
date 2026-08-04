@@ -62,6 +62,13 @@ AuthoritativeServer::AuthoritativeServer(ServerConfig config)
     config_.chunk_interval_ticks = std::max<std::uint32_t>(1U, config_.chunk_interval_ticks);
     config_.directory_heartbeat_updates =
         std::max<std::uint32_t>(1U, config_.directory_heartbeat_updates);
+    config_.maximum_datagrams_per_update =
+        std::clamp<std::size_t>(config_.maximum_datagrams_per_update, 1U, 4'096U);
+    config_.maximum_invalid_datagrams_per_client = std::clamp<std::uint16_t>(
+        config_.maximum_invalid_datagrams_per_client, 1U, std::numeric_limits<std::uint16_t>::max());
+    config_.security_window_updates = std::max<std::uint32_t>(1U, config_.security_window_updates);
+    config_.maximum_queued_inputs =
+        std::clamp<std::size_t>(config_.maximum_queued_inputs, 1U, 16'384U);
     clients_.reserve(config_.maximum_clients);
     inputs_.reserve(256);
 }
@@ -218,7 +225,7 @@ std::uint8_t AuthoritativeServer::allocate_client_id() const noexcept {
 }
 
 void AuthoritativeServer::poll_datagrams(ServerUpdateStats& stats) {
-    for (std::size_t count = 0; count < 256U; ++count) {
+    for (std::size_t count = 0; count < config_.maximum_datagrams_per_update; ++count) {
         auto datagram = socket_.receive();
         if (!datagram) {
             break;
@@ -317,6 +324,7 @@ void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet&
         client.needs_ack = true;
     }
     if (!client.channel.receive(packet.header)) {
+        record_security_rejection(client, stats);
         return;
     }
 
@@ -324,6 +332,7 @@ void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet&
         const auto hello = decode_hello(packet.payload);
         if (!hello || hello->client_nonce != client.nonce) {
             ++stats.invalid_datagrams;
+            record_security_rejection(client, stats);
             return;
         }
         const auto welcome = encode_welcome({
@@ -346,6 +355,7 @@ void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet&
             client.inputs_this_update >= config_.maximum_inputs_per_update ||
             !sequence_more_recent(input->input_sequence, client.last_input_sequence)) {
             ++stats.rejected_inputs;
+            record_security_rejection(client, stats);
             return;
         }
 
@@ -356,6 +366,7 @@ void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet&
         if (input->target_tick - current_tick > 8U ||
             input->radius > config_.maximum_brush_radius) {
             ++stats.rejected_inputs;
+            record_security_rejection(client, stats);
             return;
         }
         ++client.inputs_this_update;
@@ -370,6 +381,12 @@ void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet&
         }
         if (!simulation_.world().in_bounds(input->target)) {
             ++stats.rejected_inputs;
+            record_security_rejection(client, stats);
+            return;
+        }
+        if (inputs_.size() >= config_.maximum_queued_inputs) {
+            ++stats.rejected_inputs;
+            ++stats.input_queue_overflows;
             return;
         }
         inputs_.push_back({
@@ -534,6 +551,24 @@ void AuthoritativeServer::send_chunk(ClientSlot& client, std::size_t chunk_index
         return;
     }
     ++stats.chunk_messages;
+}
+
+void AuthoritativeServer::record_security_rejection(ClientSlot& client,
+                                                    ServerUpdateStats& stats) noexcept {
+    if (network_update_ - client.security_window_start >= config_.security_window_updates) {
+        client.security_window_start = network_update_;
+        client.security_rejections = 0;
+    }
+    if (client.security_rejections < std::numeric_limits<std::uint16_t>::max()) {
+        ++client.security_rejections;
+    }
+    ++stats.security_rejections;
+    if (client.security_rejections >= config_.maximum_invalid_datagrams_per_client &&
+        !client.security_disconnect_queued) {
+        client.security_disconnect_queued = true;
+        client.last_heard_update = network_update_ - config_.client_timeout_updates - 1U;
+        ++stats.security_disconnects;
+    }
 }
 
 bool AuthoritativeServer::send_fragmented(ClientSlot& client, PacketType type,

@@ -43,6 +43,10 @@ struct ServerConfig {
     bool advertise_public{};
     std::optional<Endpoint> public_directory;
     std::uint32_t directory_heartbeat_updates{120};
+    std::size_t maximum_datagrams_per_update{256};
+    std::uint16_t maximum_invalid_datagrams_per_client{64};
+    std::uint32_t security_window_updates{60};
+    std::size_t maximum_queued_inputs{1'024};
 };
 
 struct ServerUpdateStats {
@@ -58,6 +62,9 @@ struct ServerUpdateStats {
     std::uint32_t directory_heartbeats{};
     std::uint32_t nat_punches{};
     std::uint32_t scene_snapshot_messages{};
+    std::uint32_t security_rejections{};
+    std::uint32_t security_disconnects{};
+    std::uint32_t input_queue_overflows{};
 };
 
 class AuthoritativeServer {
@@ -97,6 +104,9 @@ class AuthoritativeServer {
         std::uint32_t next_message_id{1};
         std::uint64_t known_scene_hash{};
         std::uint8_t inputs_this_update{};
+        std::uint32_t security_window_start{};
+        std::uint16_t security_rejections{};
+        bool security_disconnect_queued{};
         bool needs_ack{};
     };
 
@@ -111,6 +121,7 @@ class AuthoritativeServer {
     void poll_datagrams(ServerUpdateStats& stats);
     void handle_unknown(const Endpoint& endpoint, const Packet& packet, ServerUpdateStats& stats);
     void handle_client_packet(ClientSlot& client, const Packet& packet, ServerUpdateStats& stats);
+    void record_security_rejection(ClientSlot& client, ServerUpdateStats& stats) noexcept;
     void apply_inputs(ServerUpdateStats& stats);
     void send_world_updates(ServerUpdateStats& stats);
     bool send_packet(ClientSlot& client, const Packet& packet, ServerUpdateStats& stats);

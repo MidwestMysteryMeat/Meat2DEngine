@@ -233,4 +233,73 @@ void test_prediction_and_reconciliation() {
     client.disconnect();
 }
 
+void test_security_budget_disconnects_abusive_client() {
+    meat2d::net::AuthoritativeServer server({
+        .world =
+            {
+                .width = 64,
+                .height = 64,
+                .seed = 93,
+                .sleep_after_ticks = 30,
+            },
+        .port = 0,
+        .maximum_clients = 1,
+        .snapshot_interval_ticks = 1000,
+        .chunk_interval_ticks = 1000,
+        .client_timeout_updates = 100,
+        .public_directory = std::nullopt,
+        .maximum_invalid_datagrams_per_client = 2,
+        .security_window_updates = 60,
+    });
+    check(server.start(), "security budget test server failed to start");
+    if (!server.running()) {
+        return;
+    }
+
+    meat2d::net::AuthoritativeClient client;
+    check(client.connect(
+              {
+                  .address = "localhost",
+                  .port = server.port(),
+              },
+              "Security Budget Test", 0xBADBEEFU),
+          "security budget test client failed to start connecting");
+    for (int update = 0; update < 80 && !client.connected(); ++update) {
+        client.update();
+        server.update();
+        client.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    check(client.connected(), "security budget test handshake did not complete");
+    if (!client.connected()) {
+        return;
+    }
+
+    check(client.send_input({
+              .kind = meat2d::net::InputKind::Paint,
+              .focus = {8, 8},
+              .target = {8, 8},
+              .material = meat2d::MaterialId::Stone,
+              .radius = 255,
+          }),
+          "security budget test could not send its first invalid input");
+    const auto first = server.update();
+    check(first.security_rejections == 1U && first.security_disconnects == 0U,
+          "server did not record the first invalid input against the security budget");
+
+    check(client.send_input({
+              .kind = meat2d::net::InputKind::Paint,
+              .focus = {8, 8},
+              .target = {8, 8},
+              .material = meat2d::MaterialId::Stone,
+              .radius = 255,
+          }),
+          "security budget test could not send its second invalid input");
+    const auto second = server.update();
+    check(second.security_rejections == 1U && second.security_disconnects == 1U &&
+              server.client_count() == 0U,
+          "server did not disconnect the client after its invalid-input budget was exhausted");
+    client.disconnect();
+}
+
 } // namespace meat2d_tests

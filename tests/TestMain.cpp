@@ -43,6 +43,7 @@ int main() {
     test_texture_atlas_cache();
     test_authoritative_client_server_session();
     test_prediction_and_reconciliation();
+    test_security_budget_disconnects_abusive_client();
     test_organism_genome_and_ecology();
     test_organism_determinism_and_reproduction();
     test_material_catalog();

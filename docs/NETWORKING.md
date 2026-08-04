@@ -110,8 +110,18 @@ derived session token. Every input must:
 
 This prevents accidental cross-session input and raises the bar for spoofing,
 but it is not encryption or account authentication. Internet-facing games
-should add an authenticated encryption layer, identity service, and
-denial-of-service controls appropriate to their deployment.
+should add an authenticated encryption layer and identity service appropriate
+to their deployment.
+
+The server also bounds work per update with `maximum_datagrams_per_update`,
+`maximum_inputs_per_update`, and `maximum_queued_inputs`. Invalid or
+unauthorized client packets consume a rolling per-client security budget
+(`maximum_invalid_datagrams_per_client` over `security_window_updates`). Once
+that budget is exhausted, the server schedules the client for disconnect and
+reports `security_rejections` and `security_disconnects` in
+`ServerUpdateStats`. These controls prevent malformed traffic and queued
+command growth from creating unbounded work, but are not cryptographic
+authentication or encrypted transport.
 
 ## Finding and hosting sessions
 
