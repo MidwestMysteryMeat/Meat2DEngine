@@ -13,6 +13,34 @@ namespace {
 constexpr std::array<std::uint8_t, 4> file_magic{{'M', '2', 'C', 'K'}};
 constexpr std::uint8_t file_version = 1;
 
+std::filesystem::path temporary_path(const std::filesystem::path& target) {
+    auto path = target;
+    path += ".tmp";
+    return path;
+}
+
+std::filesystem::path backup_path(const std::filesystem::path& target) {
+    auto path = target;
+    path += ".bak";
+    return path;
+}
+
+void recover_chunk_file(const std::filesystem::path& target) {
+    const auto temporary = temporary_path(target);
+    const auto backup = backup_path(target);
+    std::error_code error;
+    const bool target_exists = std::filesystem::exists(target, error) && !error;
+    error.clear();
+    const bool backup_exists = std::filesystem::exists(backup, error) && !error;
+    if (!target_exists && backup_exists) {
+        std::filesystem::rename(backup, target, error);
+    } else if (target_exists && backup_exists) {
+        std::filesystem::remove(backup, error);
+    }
+    error.clear();
+    std::filesystem::remove(temporary, error);
+}
+
 } // namespace
 
 ChunkStore::ChunkStore(std::filesystem::path directory) : directory_(std::move(directory)) {}
@@ -34,7 +62,12 @@ bool ChunkStore::save_chunk(const World& world, std::int32_t column, std::int32_
         return false;
     }
 
-    std::ofstream file(chunk_path(column, row), std::ios::binary | std::ios::trunc);
+    const auto target = chunk_path(column, row);
+    const auto temporary = temporary_path(target);
+    const auto backup = backup_path(target);
+    recover_chunk_file(target);
+
+    std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
     if (!file) {
         return false;
     }
@@ -44,7 +77,32 @@ bool ChunkStore::save_chunk(const World& world, std::int32_t column, std::int32_
     file.write(reinterpret_cast<const char*>(&file_version), 1);
     file.write(
         reinterpret_cast<const char*>(cells.data()), static_cast<std::streamsize>(cells.size_bytes()));
-    return file.good();
+    file.flush();
+    const bool write_succeeded = file.good();
+    file.close();
+    if (!write_succeeded) {
+        std::filesystem::remove(temporary, error);
+        return false;
+    }
+
+    if (std::filesystem::exists(target, error)) {
+        std::filesystem::rename(target, backup, error);
+        if (error) {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+    }
+    std::filesystem::rename(temporary, target, error);
+    if (error) {
+        std::error_code restore_error;
+        if (std::filesystem::exists(backup, restore_error)) {
+            std::filesystem::rename(backup, target, restore_error);
+        }
+        std::filesystem::remove(temporary, restore_error);
+        return false;
+    }
+    std::filesystem::remove(backup, error);
+    return true;
 }
 
 std::size_t ChunkStore::save_all(const World& world) const {
@@ -60,7 +118,9 @@ std::size_t ChunkStore::save_all(const World& world) const {
 }
 
 bool ChunkStore::load_chunk(World& world, std::int32_t column, std::int32_t row) const {
-    std::ifstream file(chunk_path(column, row), std::ios::binary);
+    const auto target = chunk_path(column, row);
+    recover_chunk_file(target);
+    std::ifstream file(target, std::ios::binary);
     if (!file) {
         return false;
     }

@@ -22,8 +22,9 @@ class ChunkStore {
   public:
     explicit ChunkStore(std::filesystem::path directory);
 
-    // Writes every chunk in the world's grid to disk. Returns the number of
-    // chunks written, or 0 if the directory could not be created.
+    // Writes every chunk in the world's grid to disk using a temporary file
+    // and atomic replacement. Returns the number of chunks written, or 0 if
+    // the directory could not be created.
     std::size_t save_all(const World& world) const;
     bool save_chunk(const World& world, std::int32_t column, std::int32_t row) const;
 
