@@ -1,0 +1,14 @@
+{
+  "world": "640x360",
+  "ticks": 600,
+  "serial": {
+    "moves": 3506964,
+    "hash": "0x1bd6eb69bc9fcd55",
+    "minimum_theoretical_mcells_per_second": 50.0
+  },
+  "parallel": {
+    "moves": 2933583,
+    "hash": "0x535fbb485bb702e3",
+    "minimum_theoretical_mcells_per_second": 50.0
+  }
+}

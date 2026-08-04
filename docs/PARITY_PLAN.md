@@ -54,6 +54,9 @@ Status: **in progress**
       package installation, and package-consumer validation.
 - [x] Add fuzz targets for packet, fragmentation, replay, sprite metadata, and
       project-path parsing.
+- [x] Add opt-in coverage instrumentation and CI coverage reports.
+- [x] Add deterministic benchmark correctness checks and a throughput regression
+      gate with an explicit baseline.
 - [x] Add release tags, changelog, migration notes, generated API docs, public
       API reference, checksums, and an SBOM workflow.
 - [x] Correct product positioning and expose independent genre selectors.

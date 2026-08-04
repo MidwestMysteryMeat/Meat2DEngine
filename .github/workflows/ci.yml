@@ -73,6 +73,12 @@ jobs:
           -DMEAT2D_BUILD_CLIENT=OFF
           -DMEAT2D_BUILD_LAUNCHER=OFF
           -DMEAT2D_BUILD_EXAMPLES=OFF
+          -DMEAT2D_BUILD_SERVER=OFF
+          -DMEAT2D_BUILD_REMOTE_CLIENT=OFF
+          -DMEAT2D_BUILD_DIRECTORY=OFF
+          -DMEAT2D_BUILD_REPLAY_INSPECTOR=OFF
+          -DMEAT2D_BUILD_CLI=OFF
+          -DMEAT2D_BUILD_BENCHMARKS=OFF
 
       - name: Build
         run: cmake --build build/windows --config Debug --parallel
@@ -132,6 +138,11 @@ jobs:
           -DMEAT2D_BUILD_LAUNCHER=OFF
           -DMEAT2D_BUILD_EXAMPLES=OFF
           -DMEAT2D_BUILD_TESTS=OFF
+          -DMEAT2D_BUILD_SERVER=OFF
+          -DMEAT2D_BUILD_REMOTE_CLIENT=OFF
+          -DMEAT2D_BUILD_DIRECTORY=OFF
+          -DMEAT2D_BUILD_REPLAY_INSPECTOR=OFF
+          -DMEAT2D_BUILD_CLI=OFF
           -DMEAT2D_BUILD_BENCHMARKS=OFF
 
       - name: Build fuzz targets
@@ -139,3 +150,87 @@ jobs:
           cmake --build build/fuzz --parallel --target
           meat2d_fuzz_packet meat2d_fuzz_fragmentation meat2d_fuzz_replay
           meat2d_fuzz_sprite_sheet meat2d_fuzz_project_path
+
+  coverage:
+    name: GCC coverage report
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build and coverage tools
+        run: sudo apt-get update && sudo apt-get install --yes cmake ninja-build gcovr
+
+      - name: Configure coverage build
+        run: >-
+          cmake -S . -B build/coverage -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=g++
+          -DMEAT2D_COVERAGE=ON
+          -DMEAT2D_BUILD_CLIENT=OFF
+          -DMEAT2D_BUILD_LAUNCHER=OFF
+          -DMEAT2D_BUILD_EXAMPLES=OFF
+          -DMEAT2D_BUILD_SERVER=OFF
+          -DMEAT2D_BUILD_REMOTE_CLIENT=OFF
+          -DMEAT2D_BUILD_DIRECTORY=OFF
+          -DMEAT2D_BUILD_REPLAY_INSPECTOR=OFF
+          -DMEAT2D_BUILD_CLI=OFF
+          -DMEAT2D_BUILD_BENCHMARKS=OFF
+
+      - name: Build and test coverage target
+        run: |
+          cmake --build build/coverage --parallel
+          ctest --test-dir build/coverage --output-on-failure
+
+      - name: Generate coverage report
+        run: >-
+          gcovr --root . --object-directory build/coverage
+          --filter 'src/.*'
+          --exclude 'tests/.*'
+          --txt --xml-pretty --xml coverage.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meat2D-coverage
+          path: coverage.xml
+
+  benchmark:
+    name: Simulation benchmark gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install --yes cmake ninja-build
+
+      - name: Configure benchmark build
+        run: >-
+          cmake -S . -B build/benchmark -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DMEAT2D_BUILD_CLIENT=OFF
+          -DMEAT2D_BUILD_LAUNCHER=OFF
+          -DMEAT2D_BUILD_EXAMPLES=OFF
+          -DMEAT2D_BUILD_TESTS=OFF
+          -DMEAT2D_BUILD_SERVER=OFF
+          -DMEAT2D_BUILD_REMOTE_CLIENT=OFF
+          -DMEAT2D_BUILD_DIRECTORY=OFF
+          -DMEAT2D_BUILD_REPLAY_INSPECTOR=OFF
+          -DMEAT2D_BUILD_CLI=OFF
+
+      - name: Build benchmark
+        run: cmake --build build/benchmark --target meat2d_benchmark --parallel
+
+      - name: Run and check benchmark
+        run: |
+          ./build/benchmark/meat2d_benchmark | tee benchmark-output.txt
+          python tools/check_benchmark.py \
+            --output benchmark-output.txt \
+            --baseline benchmarks/baseline.json
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meat2D-benchmark
+          path: benchmark-output.txt

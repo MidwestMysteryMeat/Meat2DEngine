@@ -111,6 +111,11 @@ Run:
 ./build/headless/meat2d_benchmark
 ```
 
+Benchmark output is checked in CI against `benchmarks/baseline.json`; update
+that baseline only when the world/tick contract intentionally changes and
+include the measured evidence in the commit. GCC coverage can be generated
+with `-DMEAT2D_COVERAGE=ON` and `gcovr`.
+
 On a multi-config generator, executables may be under a `Debug` or `Release`
 subdirectory.
 

@@ -23,6 +23,7 @@ option(MEAT2D_BUILD_FUZZERS "Build optional Clang libFuzzer targets" OFF)
 option(MEAT2D_BUILD_BENCHMARKS "Build simulation benchmarks" ON)
 option(MEAT2D_ENABLE_INSTALL "Enable SDK/runtime installation and CPack" ON)
 option(MEAT2D_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(MEAT2D_COVERAGE "Enable GCC/Clang coverage instrumentation" OFF)
 
 set(MEAT2D_SANITIZER "" CACHE STRING "Sanitizer to enable: address, undefined, or thread")
 set_property(CACHE MEAT2D_SANITIZER PROPERTY STRINGS "" address undefined thread)
@@ -36,6 +37,12 @@ if(MEAT2D_SANITIZER)
     endif()
     if(NOT MEAT2D_SANITIZER MATCHES "^(address|undefined|thread)$")
         message(FATAL_ERROR "MEAT2D_SANITIZER must be empty, address, undefined, or thread")
+    endif()
+endif()
+
+if(MEAT2D_COVERAGE)
+    if(MSVC OR NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "MEAT2D_COVERAGE requires GCC, Clang, or AppleClang")
     endif()
 endif()
 
@@ -496,6 +503,22 @@ if(MEAT2D_SANITIZER)
             endif()
         endif()
     endforeach()
+endif()
+
+if(MEAT2D_COVERAGE)
+    foreach(candidate IN ITEMS
+        meat2d_core
+        meat2d_render
+        meat2d_tools
+        meat2d_net
+        meat2d_tests)
+        if(TARGET ${candidate})
+            target_compile_options(${candidate} PRIVATE --coverage)
+        endif()
+    endforeach()
+    if(TARGET meat2d_tests)
+        target_link_options(meat2d_tests PRIVATE --coverage)
+    endif()
 endif()
 
 if(MINGW)
