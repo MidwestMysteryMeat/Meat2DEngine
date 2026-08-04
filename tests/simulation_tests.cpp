@@ -1,6 +1,7 @@
 #include "meat2d/ai/LivingSimulation.hpp"
 #include "meat2d/ai/Crowd.hpp"
 #include "meat2d/ai/LearningAgent.hpp"
+#include "meat2d/ai/LearningEnvironment.hpp"
 #include "meat2d/ai/NeuralNetwork.hpp"
 #include "meat2d/assets/Animation.hpp"
 #include "meat2d/assets/SpriteSheet.hpp"
@@ -819,6 +820,46 @@ void test_deterministic_crowds() {
     check(first_step.moved == second_step.moved && first.set_target(1U, {0, 0}) &&
               first.remove_agent(2U) && !first.remove_agent(2U),
           "crowd target and removal operations were not deterministic");
+}
+
+void test_bounded_learning_environment() {
+    const auto scale = meat2d::ai::neural_fixed_scale;
+    meat2d::ai::FixedNeuralNetwork policy;
+    check(policy.set_layers({
+              {.input_units = 2,
+               .output_units = 2,
+               .weights = {scale, 0, 0, scale},
+               .biases = {0, 0},
+               .activation = meat2d::ai::NeuralActivation::ReLU},
+          }),
+          "learning environment test could not build a bounded policy");
+    meat2d::ai::MachineLearningAgent agent(9U, 1U);
+    check(agent.set_policy(std::move(policy), 2U),
+          "learning environment test could not install its policy");
+
+    meat2d::ai::LearningEnvironment environment({.observation_units = 2,
+                                                  .maximum_episode_steps = 2U});
+    check(environment.valid() && environment.begin_episode() && environment.active(),
+          "learning environment rejected a valid episode");
+    const std::vector<std::int32_t> first_observation{scale, 0};
+    const std::vector<std::int32_t> invalid_observation{scale};
+    check(environment.choose_action(agent, first_observation) == 0U &&
+              !environment.choose_action(agent, invalid_observation).has_value() &&
+              environment.finish_step(3, false) && environment.steps() == 1U &&
+              environment.transitions().size() == 1U &&
+              environment.transitions()[0].reward == 3 &&
+              environment.transitions()[0].action == 0U,
+          "learning environment did not validate and record its first transition");
+    const std::vector<std::int32_t> second_observation{0, scale};
+    check(environment.choose_action(agent, second_observation) == 1U &&
+              environment.finish_step(-1, true) && !environment.active() &&
+              environment.steps() == 2U && environment.transitions().back().terminal &&
+              environment.state_hash() != 0U,
+          "learning environment did not terminate and hash a bounded episode");
+    check(!meat2d::ai::LearningEnvironment({.observation_units = 0,
+                                             .maximum_episode_steps = 2U})
+                .valid(),
+          "learning environment accepted an invalid observation contract");
 }
 
 void test_mcp_gateway_safety_and_discovery() {
@@ -3029,6 +3070,7 @@ int main() {
         test_scene_editor_model();
         test_neural_network_and_learning_agents();
         test_deterministic_crowds();
+        test_bounded_learning_environment();
         test_mcp_gateway_safety_and_discovery();
         test_input_state_and_action_map();
         test_camera_transforms_and_clamping();

@@ -208,8 +208,9 @@ Status: planned
 - [ ] Beginner tutorial and one-hour game guide.
 - [ ] AI crowd, neural-policy, and MCP tooling examples with threat-model and
       permission documentation.
-- [ ] Headless ML environment runner with bounded observations/actions,
-      dataset export, evaluation splits, and offline trainer adapters.
+- [x] Headless ML environment runner with bounded observations/actions,
+      rewards, terminal transitions, and episode limits.
+- [ ] Dataset export, evaluation splits, and offline trainer adapters.
 - [ ] Optional Lua authoring/training package with sandboxed script execution,
       model import/export, and no direct authority over World or Scene state.
 - [ ] Multiplayer, platformer, destructible-terrain, cellular-roguelite,

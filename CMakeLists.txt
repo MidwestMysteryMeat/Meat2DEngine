@@ -47,8 +47,9 @@ add_library(
     src/assets/TileMap.cpp
     src/assets/SpriteSheet.cpp
     src/assets/TextureAtlas.cpp
-    src/ai/Crowd.cpp
-    src/ai/LearningAgent.cpp
+      src/ai/Crowd.cpp
+      src/ai/LearningEnvironment.cpp
+      src/ai/LearningAgent.cpp
     src/ai/LivingSimulation.cpp
     src/ai/NeuralNetwork.cpp
     src/input/Input.cpp

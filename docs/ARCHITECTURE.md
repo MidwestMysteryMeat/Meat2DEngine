@@ -27,8 +27,10 @@ populations can use it without inheriting material simulation costs.
 `ai::FixedNeuralNetwork` is an inference-only fixed-point model surface, and
 `ai::MachineLearningAgent` wraps it with observation/action selection,
 deterministic tie-breaking, reward accumulation, and per-tick decision budgets.
-Model training and export are external so authoritative servers do not depend
-on Python, GPUs, or nondeterministic floating-point training runtimes.
+`ai::LearningEnvironment` validates bounded observations, records transitions,
+and enforces episode limits. Model training and export are external so
+authoritative servers do not depend on Python, GPUs, or nondeterministic
+floating-point training runtimes.
 
 MCP is an optional tooling integration, not an in-game authority. The current
 `tools::McpGateway` provides authenticated, discovery-first scene inspection

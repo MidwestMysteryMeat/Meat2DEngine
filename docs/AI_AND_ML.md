@@ -10,7 +10,8 @@ Meat2D supports three related but separate AI surfaces:
    models using fixed-point arithmetic. `MachineLearningAgent` selects actions,
    accumulates rewards, and enforces decision budgets. Training, data capture,
    and model conversion belong in external tools and are not part of a
-   production server tick.
+   production server tick. `LearningEnvironment` supplies the bounded
+   observation/action/reward/episode seam for headless training and evaluation.
 3. **MCP tooling.** `McpGateway` is the first transport-neutral Model Context
    Protocol boundary. Future adapters can let approved AI assistants inspect
    projects, scenes, assets, tests, and build results. Mutations must go through

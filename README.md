@@ -31,6 +31,8 @@ editor, selectable game-type starters, and one-command packaging.
 - Bounded deterministic crowd steering with stable agent IDs, target seeking,
   local separation, and world bounds
 - Fixed-point neural-network inference and budgeted machine-learning agents
+- Bounded headless learning environments with validated observations, actions,
+  rewards, terminal transitions, and episode limits
   with deterministic action selection and reward state; training remains an
   external pipeline
 - Eight-byte cellular organisms with encoded traits, metabolism, environmental
