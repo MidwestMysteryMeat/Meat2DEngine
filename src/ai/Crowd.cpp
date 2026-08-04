@@ -1,7 +1,7 @@
 #include "meat2d/ai/Crowd.hpp"
 
 #include <algorithm>
-#include <limits>
+#include <cstdlib>
 
 namespace meat2d::ai {
 namespace {
@@ -22,20 +22,22 @@ template <typename Integer> void hash_integer(std::uint64_t& hash, Integer value
     }
 }
 
-std::int32_t direction(std::int32_t value) noexcept {
+std::int32_t direction(std::int64_t value) noexcept {
     return value < 0 ? -1 : value > 0 ? 1 : 0;
 }
 
 } // namespace
 
 CrowdSimulation::CrowdSimulation(std::size_t max_agents)
-    : maximum_agents_(std::clamp(max_agents, std::size_t{1}, maximum_crowd_agents)) {
+    : maximum_agents_(std::clamp(max_agents, std::size_t{1}, maximum_crowd_agents)),
+      spatial_index_(maximum_agents_) {
     agents_.reserve(maximum_agents_);
 }
 
 bool CrowdSimulation::add_agent(CrowdAgent agent) {
     if (agent.id == 0U || find(agent.id) != nullptr || agents_.size() == maximum_agents_ ||
-        agent.max_step < 0 || agent.separation_radius < 0) {
+        agent.max_step < 0 || agent.separation_radius < 0 ||
+        agent.separation_radius > maximum_crowd_separation_radius) {
         return false;
     }
     agents_.push_back(agent);
@@ -88,19 +90,25 @@ CrowdStepStats CrowdSimulation::step(RectI bounds) {
     if (bounds.empty()) {
         return stats;
     }
-    for (auto& agent : agents_) {
+    step_snapshot_ = agents_;
+    spatial_index_.rebuild(step_snapshot_);
+    for (std::size_t agent_index = 0; agent_index < agents_.size(); ++agent_index) {
+        auto& agent = agents_[agent_index];
         if (!agent.enabled || agent.max_step == 0) {
             continue;
         }
-        Vec2i delta{direction(agent.target.x - agent.position.x),
-                    direction(agent.target.y - agent.position.y)};
+        const auto& snapshot = step_snapshot_[agent_index];
+        Vec2i delta{direction(static_cast<std::int64_t>(snapshot.target.x) - snapshot.position.x),
+                    direction(static_cast<std::int64_t>(snapshot.target.y) - snapshot.position.y)};
         bool separated = false;
-        for (const auto& other : agents_) {
+        for (const auto other_index : spatial_index_.query(snapshot.position,
+                                                            agent.separation_radius)) {
+            const auto& other = step_snapshot_[other_index];
             if (other.id == agent.id || !other.enabled) {
                 continue;
             }
-            const auto dx = agent.position.x - other.position.x;
-            const auto dy = agent.position.y - other.position.y;
+            const auto dx = static_cast<std::int64_t>(snapshot.position.x) - other.position.x;
+            const auto dy = static_cast<std::int64_t>(snapshot.position.y) - other.position.y;
             if (std::abs(dx) <= agent.separation_radius &&
                 std::abs(dy) <= agent.separation_radius) {
                 delta.x += direction(dx);
@@ -110,9 +118,13 @@ CrowdStepStats CrowdSimulation::step(RectI bounds) {
         }
         delta.x = std::clamp(delta.x, -agent.max_step, agent.max_step);
         delta.y = std::clamp(delta.y, -agent.max_step, agent.max_step);
+        const auto next_x = static_cast<std::int64_t>(snapshot.position.x) + delta.x;
+        const auto next_y = static_cast<std::int64_t>(snapshot.position.y) + delta.y;
         const auto next = Vec2i{
-            std::clamp(agent.position.x + delta.x, bounds.x, bounds.x + bounds.width - 1),
-            std::clamp(agent.position.y + delta.y, bounds.y, bounds.y + bounds.height - 1),
+            static_cast<std::int32_t>(std::clamp<std::int64_t>(
+                next_x, bounds.x, static_cast<std::int64_t>(bounds.x) + bounds.width - 1)),
+            static_cast<std::int32_t>(std::clamp<std::int64_t>(
+                next_y, bounds.y, static_cast<std::int64_t>(bounds.y) + bounds.height - 1)),
         };
         if (next != agent.position) {
             agent.position = next;

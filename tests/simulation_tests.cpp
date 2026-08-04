@@ -23,6 +23,7 @@
 #include "meat2d/render/DebugDraw.hpp"
 #include "meat2d/render/Particles.hpp"
 #include "meat2d/render/SpriteBatch.hpp"
+#include "meat2d/render/StaticMeshBatch.hpp"
 #include "meat2d/render/WorldView.hpp"
 #include "meat2d/scene/Physics.hpp"
 #include "meat2d/scene/Scene.hpp"
@@ -733,6 +734,28 @@ void test_sprite_batch() {
     meat2d::render::SpriteBatch bounded(1);
     check(!bounded.build(scene, camera, false) && bounded.commands().empty(),
           "sprite batch exceeded its command budget or partially replaced commands");
+}
+
+void test_static_mesh_instance_batch() {
+    const std::vector<meat2d::render::StaticMeshInstance> instances{
+        {.entity = 2, .mesh = 20, .position = {10, 10}, .local_bounds = {0, 0, 16, 8}, .layer = 1},
+        {.entity = 1, .mesh = 10, .position = {20, 10}, .local_bounds = {0, 0, 8, 8}, .layer = 1},
+        {.entity = 3, .mesh = 30, .position = {10, 10}, .local_bounds = {0, 0, 8, 8},
+         .layer = 2, .visible = false},
+        {.entity = 4, .mesh = 40, .position = {500, 500}, .local_bounds = {0, 0, 8, 8}},
+    };
+    meat2d::render::Camera2D camera;
+    camera.set_center({50, 30});
+    camera.set_viewport({100, 60});
+    meat2d::render::StaticMeshInstanceBatch batch(3);
+    check(batch.build(instances, camera) && batch.commands().size() == 2U &&
+              batch.commands()[0].mesh == 10U && batch.commands()[1].mesh == 20U &&
+              batch.commands()[0].world_bounds == meat2d::RectI{20, 10, 8, 8} &&
+              batch.commands()[1].screen_bounds == meat2d::RectI{10, 10, 16, 8},
+          "static mesh instances were not culled or sorted for instanced rendering");
+    meat2d::render::StaticMeshInstanceBatch bounded(1);
+    check(!bounded.build(instances, camera) && bounded.commands().empty(),
+          "static mesh instance batch exceeded its command budget or partially replaced commands");
 }
 
 void test_scene_editor_model() {
@@ -3067,6 +3090,7 @@ int main() {
         test_rigid_body_step_and_particles();
         test_collision_layers_and_debug_draw();
         test_sprite_batch();
+        test_static_mesh_instance_batch();
         test_scene_editor_model();
         test_neural_network_and_learning_agents();
         test_deterministic_crowds();

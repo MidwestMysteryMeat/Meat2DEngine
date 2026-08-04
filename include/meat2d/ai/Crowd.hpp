@@ -1,6 +1,7 @@
 #pragma once
 
-#include "meat2d/core/Types.hpp"
+#include "meat2d/ai/CrowdTypes.hpp"
+#include "meat2d/ai/CrowdSpatialIndex.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -8,25 +9,6 @@
 #include <vector>
 
 namespace meat2d::ai {
-
-inline constexpr std::size_t maximum_crowd_agents = 16'384U;
-
-struct CrowdAgent {
-    std::uint32_t id{};
-    Vec2i position{};
-    Vec2i target{};
-    std::int32_t max_step{1};
-    std::int32_t separation_radius{2};
-    bool enabled{true};
-
-    friend bool operator==(const CrowdAgent&, const CrowdAgent&) = default;
-};
-
-struct CrowdStepStats {
-    std::uint32_t agents{};
-    std::uint32_t moved{};
-    std::uint32_t separated{};
-};
 
 // Stable-ID integer crowd steering. It is intentionally navigation-backend
 // neutral: a game can add tile/path queries later, while this layer provides
@@ -48,6 +30,9 @@ class CrowdSimulation {
   private:
     std::size_t maximum_agents_{};
     std::vector<CrowdAgent> agents_;
+
+    std::vector<CrowdAgent> step_snapshot_;
+    CrowdSpatialIndex spatial_index_;
 };
 
 } // namespace meat2d::ai
