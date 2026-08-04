@@ -52,6 +52,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 #include "TestSupport.hpp"
 
@@ -160,28 +161,36 @@ void test_project_manager_validation_and_templates() {
                                                "build.yml"),
           "generated starter omitted code, presets, or publishing workflow");
 
-    const std::array<meat2d::tools::ProjectTemplate, 9> project_templates{
-        meat2d::tools::ProjectTemplate::SideScroller,
-        meat2d::tools::ProjectTemplate::TopDown,
-        meat2d::tools::ProjectTemplate::Metroidvania,
-        meat2d::tools::ProjectTemplate::VisualNovel,
-        meat2d::tools::ProjectTemplate::Rpg,
-        meat2d::tools::ProjectTemplate::DestructibleArtillery,
-        meat2d::tools::ProjectTemplate::CellularRoguelite,
-        meat2d::tools::ProjectTemplate::FallingSand,
-        meat2d::tools::ProjectTemplate::SandboxSurvival,
+    struct TemplateCase {
+        meat2d::tools::ProjectTemplate project_template;
+        std::string_view directory;
+    };
+    const std::array<TemplateCase, 9> project_templates{
+        TemplateCase{meat2d::tools::ProjectTemplate::SideScroller, "side_scroller"},
+        TemplateCase{meat2d::tools::ProjectTemplate::TopDown, "top_down"},
+        TemplateCase{meat2d::tools::ProjectTemplate::Metroidvania, "metroidvania"},
+        TemplateCase{meat2d::tools::ProjectTemplate::VisualNovel, "visual_novel"},
+        TemplateCase{meat2d::tools::ProjectTemplate::Rpg, "rpg"},
+        TemplateCase{meat2d::tools::ProjectTemplate::DestructibleArtillery,
+                     "destructible_artillery"},
+        TemplateCase{meat2d::tools::ProjectTemplate::CellularRoguelite, "cellular_roguelite"},
+        TemplateCase{meat2d::tools::ProjectTemplate::FallingSand, "falling_sand"},
+        TemplateCase{meat2d::tools::ProjectTemplate::SandboxSurvival, "sandbox_survival"},
     };
     for (std::size_t index = 0; index < project_templates.size(); ++index) {
         const auto result = manager.create_project({
             .name = "Template Test " + std::to_string(index),
             .directory = test_parent / ("template-" + std::to_string(index)),
-            .project_template = project_templates[index],
+            .project_template = project_templates[index].project_template,
             .engine_git_tag = "main",
         });
         check(result.success, "project manager could not create a selectable game template");
         check(std::filesystem::is_regular_file(test_parent / ("template-" + std::to_string(index)) /
                                                "src" / "main.cpp"),
               "selectable game template omitted its source starter");
+        check(std::filesystem::is_regular_file(templates / project_templates[index].directory /
+                                               "DESIGN.md"),
+              "selectable game template omitted its design contract");
     }
 
     const std::array<std::string_view, 4> fixed_tick_templates{

@@ -40,7 +40,7 @@
 
 - [x] Public client/rendering library target
 - [x] `meat2d new` starter-game scaffolder
-- [ ] Selectable side-scroller/action-platformer, top-down/RTS, RPG, visual
+- [x] Selectable side-scroller/action-platformer, top-down/RTS, RPG, visual
       novel, destructible-artillery, cellular-roguelite, falling-sand, and
       sandbox-survival starter templates
 - [x] Asset and settings manifests

@@ -333,8 +333,9 @@ examples/        deep_dig, a complete example game built on the public API
 include/meat2d/  public engine API
 src/             engine implementation, including scene, input, and camera
                  runtime systems
-templates/       selectable side-scroller, top-down, metroidvania, and
-                 falling-sand game starters
+templates/       selectable side-scroller, top-down/RTS, metroidvania, RPG,
+                 visual-novel, artillery, roguelite, falling-sand, and
+                 sandbox-survival starters
 tests/           unit and determinism tests
 ```
 
