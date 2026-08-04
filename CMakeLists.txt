@@ -499,6 +499,11 @@ if(MEAT2D_BUILD_BENCHMARKS)
     target_compile_features(meat2d_benchmark PRIVATE cxx_std_20)
     target_link_libraries(meat2d_benchmark PRIVATE Meat2D::Core)
     list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_benchmark)
+
+    add_executable(meat2d_compression_benchmark benchmarks/compression_benchmark.cpp)
+    target_compile_features(meat2d_compression_benchmark PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_compression_benchmark PRIVATE Meat2D::Core)
+    list(APPEND MEAT2D_RUNTIME_TARGETS meat2d_compression_benchmark)
 endif()
 
 # Keep sanitizer flags scoped to Meat2D targets so fetched third-party projects
@@ -520,6 +525,7 @@ if(MEAT2D_SANITIZER)
         meat2d_cli
         meat2d_tests
         meat2d_benchmark
+        meat2d_compression_benchmark
     )
         if(TARGET ${candidate})
             target_compile_options(

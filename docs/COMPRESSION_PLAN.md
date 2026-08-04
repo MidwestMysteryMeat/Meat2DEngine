@@ -72,8 +72,9 @@ simulation subsystem.
       behavior for bounded raw/LZAV blocks.
 - [x] Add a third-party notice/pinning policy and pin LZAV revision
       `ebe3b58aea896e8ce6db6d7ddbb11dffced281e4`; benchmark selection remains.
-- [ ] Benchmark raw, LZAV, and no-compression paths on scene files, tile maps,
-      JSON/TOML metadata, world chunks, snapshots, and incompressible data.
+- [x] Benchmark raw, LZAV, and no-compression paths on representative scene,
+      tile-map, JSON/TOML metadata, world-chunk, snapshot, and incompressible
+      payloads with `meat2d_compression_benchmark`.
 - [ ] Define thresholds where storing raw data is cheaper or faster.
 
 ### Compression 1 — assets and package build
