@@ -57,6 +57,7 @@ add_library(
     src/life/OrganismField.cpp
     src/replay/Replay.cpp
     src/scene/Scene.cpp
+    src/scene/SceneSerialization.cpp
     src/scene/SceneHistory.cpp
     src/scene/SceneSnapshot.cpp
     src/scene/SceneStack.cpp
