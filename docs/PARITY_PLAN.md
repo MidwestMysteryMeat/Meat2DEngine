@@ -40,6 +40,9 @@ locally and over the network, save and replay the complete authoritative state,
 and package it for every supported desktop platform without writing engine
 infrastructure first.
 
+For the current phase percentages, release-tier interpretation, and explicit
+production blockers, see [Production plan](PRODUCTION_PLAN.md).
+
 ## Implementation order
 
 ### Phase 0 — Reliable SDK foundation
