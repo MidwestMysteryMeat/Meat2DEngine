@@ -132,8 +132,10 @@ has succeeded.
 - [x] Add versioned AEAD blocks with bounded sizes, key IDs, nonces, tags, and
       AAD.
 - [x] Add secure RNG, key generation, zeroization, and failure contracts.
-- [x] Add round-trip, tamper, wrong-key, wrong-AAD, truncation, and
-      allocation-budget tests; known-answer vectors and fuzzing remain.
+- [x] Add round-trip, tamper, wrong-key, wrong-AAD, truncation, allocation-
+      budget, and libsodium official known-answer tests.
+- [x] Add a bounded `meat2d_fuzz_crypto` target for envelope parsing and
+      decryption failure paths; sustained fuzzing remains a release task.
 
 ### Encryption 2 — packages and saves
 

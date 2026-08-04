@@ -509,12 +509,17 @@ if(MEAT2D_BUILD_FUZZERS)
     target_compile_features(meat2d_fuzz_project_path PRIVATE cxx_std_20)
     target_link_libraries(meat2d_fuzz_project_path PRIVATE Meat2D::Tools)
 
+    add_executable(meat2d_fuzz_crypto tests/fuzz/crypto_fuzz.cpp)
+    target_compile_features(meat2d_fuzz_crypto PRIVATE cxx_std_20)
+    target_link_libraries(meat2d_fuzz_crypto PRIVATE Meat2D::Core)
+
     foreach(fuzzer IN ITEMS
         meat2d_fuzz_packet
         meat2d_fuzz_fragmentation
         meat2d_fuzz_replay
         meat2d_fuzz_sprite_sheet
-        meat2d_fuzz_project_path)
+        meat2d_fuzz_project_path
+        meat2d_fuzz_crypto)
         target_compile_options(${fuzzer} PRIVATE ${MEAT2D_FUZZER_FLAGS})
         target_link_options(${fuzzer} PRIVATE ${MEAT2D_FUZZER_FLAGS})
     endforeach()
