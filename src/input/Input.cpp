@@ -11,8 +11,18 @@ void InputState::begin_frame() noexcept {
     released_keys_.fill(false);
     pressed_mouse_buttons_.fill(false);
     released_mouse_buttons_.fill(false);
+    for (auto& buttons : pressed_gamepad_buttons_) {
+        buttons.fill(false);
+    }
+    for (auto& buttons : released_gamepad_buttons_) {
+        buttons.fill(false);
+    }
+    pressed_touches_.fill(false);
+    released_touches_.fill(false);
     mouse_delta_x_ = 0;
     mouse_delta_y_ = 0;
+    touch_delta_x_.fill(0);
+    touch_delta_y_.fill(0);
 }
 
 void InputState::set_key(Key key, bool down) noexcept {
@@ -73,6 +83,110 @@ bool InputState::mouse_released(MouseButton button) const noexcept {
            released_mouse_buttons_[static_cast<std::size_t>(button)];
 }
 
+void InputState::set_gamepad_button(std::uint8_t gamepad, GamepadButton button, bool down) noexcept {
+    if (!valid_gamepad(gamepad) || !valid_gamepad_button(button)) {
+        return;
+    }
+    const auto gamepad_index = static_cast<std::size_t>(gamepad);
+    const auto button_index = static_cast<std::size_t>(button);
+    if (gamepad_buttons_[gamepad_index][button_index] == down) {
+        return;
+    }
+    gamepad_buttons_[gamepad_index][button_index] = down;
+    if (down) {
+        pressed_gamepad_buttons_[gamepad_index][button_index] = true;
+    } else {
+        released_gamepad_buttons_[gamepad_index][button_index] = true;
+    }
+}
+
+bool InputState::gamepad_button_down(std::uint8_t gamepad, GamepadButton button) const noexcept {
+    return valid_gamepad(gamepad) && valid_gamepad_button(button) &&
+           gamepad_buttons_[static_cast<std::size_t>(gamepad)][static_cast<std::size_t>(button)];
+}
+
+bool InputState::gamepad_button_pressed(std::uint8_t gamepad, GamepadButton button) const noexcept {
+    return valid_gamepad(gamepad) && valid_gamepad_button(button) &&
+           pressed_gamepad_buttons_[static_cast<std::size_t>(gamepad)]
+                                   [static_cast<std::size_t>(button)];
+}
+
+bool InputState::gamepad_button_released(std::uint8_t gamepad,
+                                         GamepadButton button) const noexcept {
+    return valid_gamepad(gamepad) && valid_gamepad_button(button) &&
+           released_gamepad_buttons_[static_cast<std::size_t>(gamepad)]
+                                   [static_cast<std::size_t>(button)];
+}
+
+void InputState::set_gamepad_axis(std::uint8_t gamepad, GamepadAxis axis,
+                                  std::int16_t value) noexcept {
+    if (!valid_gamepad(gamepad) || !valid_gamepad_axis(axis)) {
+        return;
+    }
+    gamepad_axes_[static_cast<std::size_t>(gamepad)][static_cast<std::size_t>(axis)] = value;
+}
+
+std::int16_t InputState::gamepad_axis(std::uint8_t gamepad, GamepadAxis axis) const noexcept {
+    if (!valid_gamepad(gamepad) || !valid_gamepad_axis(axis)) {
+        return 0;
+    }
+    return gamepad_axes_[static_cast<std::size_t>(gamepad)][static_cast<std::size_t>(axis)];
+}
+
+void InputState::set_touch(std::uint8_t touch, std::uint64_t id, bool down, std::int32_t x,
+                           std::int32_t y) noexcept {
+    if (!valid_touch(touch)) {
+        return;
+    }
+    const auto index = static_cast<std::size_t>(touch);
+    touch_delta_x_[index] += x - touch_x_[index];
+    touch_delta_y_[index] += y - touch_y_[index];
+    touch_x_[index] = x;
+    touch_y_[index] = y;
+    touch_ids_[index] = id;
+    if (touches_[index] == down) {
+        return;
+    }
+    touches_[index] = down;
+    if (down) {
+        pressed_touches_[index] = true;
+    } else {
+        released_touches_[index] = true;
+    }
+}
+
+bool InputState::touch_down(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) && touches_[static_cast<std::size_t>(touch)];
+}
+
+bool InputState::touch_pressed(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) && pressed_touches_[static_cast<std::size_t>(touch)];
+}
+
+bool InputState::touch_released(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) && released_touches_[static_cast<std::size_t>(touch)];
+}
+
+std::uint64_t InputState::touch_id(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) ? touch_ids_[static_cast<std::size_t>(touch)] : 0U;
+}
+
+std::int32_t InputState::touch_x(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) ? touch_x_[static_cast<std::size_t>(touch)] : 0;
+}
+
+std::int32_t InputState::touch_y(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) ? touch_y_[static_cast<std::size_t>(touch)] : 0;
+}
+
+std::int32_t InputState::touch_delta_x(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) ? touch_delta_x_[static_cast<std::size_t>(touch)] : 0;
+}
+
+std::int32_t InputState::touch_delta_y(std::uint8_t touch) const noexcept {
+    return valid_touch(touch) ? touch_delta_y_[static_cast<std::size_t>(touch)] : 0;
+}
+
 void InputState::set_mouse_position(std::int32_t x, std::int32_t y) noexcept {
     mouse_delta_x_ += x - mouse_x_;
     mouse_delta_y_ += y - mouse_y_;
@@ -103,6 +217,22 @@ bool InputState::valid_key(Key key) noexcept {
 
 bool InputState::valid_mouse_button(MouseButton button) noexcept {
     return static_cast<std::size_t>(button) < mouse_button_count;
+}
+
+bool InputState::valid_gamepad_button(GamepadButton button) noexcept {
+    return static_cast<std::size_t>(button) < gamepad_button_count;
+}
+
+bool InputState::valid_gamepad_axis(GamepadAxis axis) noexcept {
+    return static_cast<std::size_t>(axis) < gamepad_axis_count;
+}
+
+bool InputState::valid_gamepad(std::uint8_t gamepad) noexcept {
+    return static_cast<std::size_t>(gamepad) < maximum_gamepads;
+}
+
+bool InputState::valid_touch(std::uint8_t touch) noexcept {
+    return static_cast<std::size_t>(touch) < maximum_touches;
 }
 
 ActionId ActionMap::register_action(std::string name) {
@@ -147,6 +277,23 @@ bool ActionMap::bind_mouse_button(ActionId action, MouseButton button) {
     }
     return bind(action, Binding{.type = BindingType::MouseButton,
                                 .value = static_cast<std::uint16_t>(button)});
+}
+
+bool ActionMap::bind_gamepad_button(ActionId action, std::uint8_t gamepad,
+                                    GamepadButton button) {
+    if (!InputState::valid_gamepad(gamepad) || !InputState::valid_gamepad_button(button)) {
+        return false;
+    }
+    return bind(action, Binding{.type = BindingType::GamepadButton,
+                                .value = static_cast<std::uint16_t>(button),
+                                .device = gamepad});
+}
+
+bool ActionMap::bind_touch(ActionId action, std::uint8_t touch) {
+    if (!InputState::valid_touch(touch)) {
+        return false;
+    }
+    return bind(action, Binding{.type = BindingType::Touch, .value = touch});
 }
 
 bool ActionMap::clear_bindings(ActionId action) noexcept {
@@ -221,21 +368,39 @@ bool ActionMap::binding_down(const Binding& binding, const InputState& state) co
     if (binding.type == BindingType::Key) {
         return state.key_down(static_cast<Key>(binding.value));
     }
-    return state.mouse_down(static_cast<MouseButton>(binding.value));
+    if (binding.type == BindingType::MouseButton) {
+        return state.mouse_down(static_cast<MouseButton>(binding.value));
+    }
+    if (binding.type == BindingType::GamepadButton) {
+        return state.gamepad_button_down(binding.device, static_cast<GamepadButton>(binding.value));
+    }
+    return state.touch_down(static_cast<std::uint8_t>(binding.value));
 }
 
 bool ActionMap::binding_pressed(const Binding& binding, const InputState& state) const noexcept {
     if (binding.type == BindingType::Key) {
         return state.key_pressed(static_cast<Key>(binding.value));
     }
-    return state.mouse_pressed(static_cast<MouseButton>(binding.value));
+    if (binding.type == BindingType::MouseButton) {
+        return state.mouse_pressed(static_cast<MouseButton>(binding.value));
+    }
+    if (binding.type == BindingType::GamepadButton) {
+        return state.gamepad_button_pressed(binding.device, static_cast<GamepadButton>(binding.value));
+    }
+    return state.touch_pressed(static_cast<std::uint8_t>(binding.value));
 }
 
 bool ActionMap::binding_released(const Binding& binding, const InputState& state) const noexcept {
     if (binding.type == BindingType::Key) {
         return state.key_released(static_cast<Key>(binding.value));
     }
-    return state.mouse_released(static_cast<MouseButton>(binding.value));
+    if (binding.type == BindingType::MouseButton) {
+        return state.mouse_released(static_cast<MouseButton>(binding.value));
+    }
+    if (binding.type == BindingType::GamepadButton) {
+        return state.gamepad_button_released(binding.device, static_cast<GamepadButton>(binding.value));
+    }
+    return state.touch_released(static_cast<std::uint8_t>(binding.value));
 }
 
 } // namespace meat2d::input

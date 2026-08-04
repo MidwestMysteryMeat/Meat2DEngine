@@ -448,6 +448,10 @@ void test_input_state_and_action_map() {
     meat2d::input::InputState input;
     input.set_key(meat2d::input::Key::D, true);
     input.set_mouse_button(meat2d::input::MouseButton::Left, true);
+    input.set_gamepad_button(0, meat2d::input::GamepadButton::South, true);
+    input.set_gamepad_axis(0, meat2d::input::GamepadAxis::LeftX, 1234);
+    input.set_touch(0, 42U, true, 100, 200);
+    input.set_touch(0, 42U, true, 120, 210);
     input.set_mouse_position(10, 12);
     input.set_mouse_position(16, 15);
     check(input.key_down(meat2d::input::Key::D) && input.key_pressed(meat2d::input::Key::D),
@@ -455,6 +459,14 @@ void test_input_state_and_action_map() {
     check(input.mouse_down(meat2d::input::MouseButton::Left) &&
               input.mouse_pressed(meat2d::input::MouseButton::Left),
           "input state did not record a mouse press");
+    check(input.gamepad_button_down(0, meat2d::input::GamepadButton::South) &&
+              input.gamepad_button_pressed(0, meat2d::input::GamepadButton::South) &&
+              input.gamepad_axis(0, meat2d::input::GamepadAxis::LeftX) == 1234,
+          "input state did not record gamepad buttons and axes");
+    check(input.touch_down(0) && input.touch_pressed(0) && input.touch_id(0) == 42U &&
+              input.touch_x(0) == 120 && input.touch_y(0) == 210 && input.touch_delta_x(0) == 120 &&
+              input.touch_delta_y(0) == 210,
+          "input state did not record bounded touch contact data");
     check(input.mouse_x() == 16 && input.mouse_y() == 15 && input.mouse_delta_x() == 16 &&
               input.mouse_delta_y() == 15,
           "input state did not accumulate mouse movement");
@@ -464,7 +476,9 @@ void test_input_state_and_action_map() {
     check(move != meat2d::input::invalid_action && actions.find_action("move_right") == move,
           "action map did not register an action");
     check(actions.bind_key(move, meat2d::input::Key::D) &&
-              actions.bind_mouse_button(move, meat2d::input::MouseButton::Left),
+              actions.bind_mouse_button(move, meat2d::input::MouseButton::Left) &&
+              actions.bind_gamepad_button(move, 0, meat2d::input::GamepadButton::South) &&
+              actions.bind_touch(move, 0),
           "action map rejected valid bindings");
     check(actions.down(move, input) && actions.pressed(move, input),
           "action map did not resolve active bindings");
@@ -474,6 +488,8 @@ void test_input_state_and_action_map() {
           "input frame reset cleared held state or retained edge state");
     input.set_key(meat2d::input::Key::D, false);
     input.set_mouse_button(meat2d::input::MouseButton::Left, false);
+    input.set_gamepad_button(0, meat2d::input::GamepadButton::South, false);
+    input.set_touch(0, 42U, false, 120, 210);
     check(actions.released(move, input), "action map did not resolve released bindings");
     check(actions.clear_bindings(move) && !actions.down(move, input),
           "action map did not clear bindings");

@@ -113,13 +113,15 @@ Status: planned
       resolution and content hashing.
 - [x] Bounded camera-culled backend-neutral sprite batching with deterministic
       layer/entity ordering.
-- [x] Backend-neutral keyboard/mouse input state and action bindings.
+- [x] Backend-neutral keyboard, mouse, gamepad, and touch input state with
+      action bindings.
 - [ ] SDL/gamepad/touch adapters, culling, layers, parallax, and screen effects.
 - [x] Sprite animation playback.
 - [x] Bounded deterministic particle simulation.
 - [x] Renderer-neutral bounded debug draw command list.
 - [ ] Fonts and backend adapters for debug drawing.
-- [ ] Keyboard, mouse, gamepad, and touch input with action maps and rebinding.
+- [x] Keyboard, mouse, gamepad, and touch input state with action maps and
+      rebinding; platform event adapters remain separate.
 - [ ] Audio playback, music, mixing, and spatial audio.
 - [ ] Runtime UI and debug console.
 - [x] Initial renderer-neutral tilemap layers, atlas metadata, solid-cell

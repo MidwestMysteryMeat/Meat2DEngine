@@ -26,6 +26,10 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
   and deterministic or parallel stepping.
 - `meat2d/render/`: camera and render data extraction. It does not require an
   SDL window in headless builds.
+- `meat2d/input/`: bounded keyboard, mouse, gamepad, and touch state with
+  deterministic frame edges, deltas, and action-map bindings. SDL or another
+  platform event source is responsible for translating native events into this
+  backend-neutral state.
 - `meat2d/net/`: wire protocol, packet validation, sessions, replay-safe
   snapshots, and discovery.
 - `meat2d/tools/`: project/template, asset, and editor workflows.
