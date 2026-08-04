@@ -14,7 +14,8 @@ chunks page in as players explore, instead of `World` owning one fixed-size arra
 its whole lifetime.
 
 **Current constraint.** `World` stores chunks in a flat `std::vector<Chunk> chunks_`
-sized `chunk_columns_ * chunk_rows_` at construction (`src/sim/World.cpp`), addressed
+sized `chunk_columns_ * chunk_rows_` at construction (`src/sim/World.cpp` and
+`src/sim/WorldDiagnostics.cpp`), addressed
 by `chunk_index(Vec2i) = (y/64)*chunk_columns_ + (x/64)`. Six call sites assume this
 dense, `0..N-1`, fixed-size layout via `World::chunk_columns()`/`chunk_rows()`/
 `chunks()`/`chunk_dirty_rect()`:
@@ -25,7 +26,7 @@ dense, `0..N-1`, fixed-size layout via `World::chunk_columns()`/`chunk_rows()`/
 | `src/render/WorldView.cpp` | 3 | Iterates the full grid each frame to find dirty regions |
 | `src/sim/ChunkStore.cpp` | 4 | Iterates the full grid to save/load (this session's work) |
 | `src/net/Session.cpp` | 3 | Chunk-interest management (which chunks a client is sent) |
-| `tests/simulation_tests.cpp` | several | Assume `chunk_columns()/chunk_rows()` are stable per-`World` |
+| `tests/WorldRenderingTests.cpp` and `tests/PersistenceParallelTests.cpp` | several | Assume `chunk_columns()/chunk_rows()` are stable per-`World` |
 
 **Phased approach.**
 
@@ -97,7 +98,7 @@ candidate, adjust if a different choice is made).**
 2. **Define the hook surface.** A small, explicit set of C++ call sites that invoke
    into script if a handler is registered — start narrow and grow, not the reverse:
    - `on_material_transform(cell_position, from_material, to_material)` — natural spot
-     in `World::transform_cell` (`src/sim/World.cpp`).
+     in `World::transform_cell` (`src/sim/WorldReactions.cpp`).
    - `on_tick_start(tick)` / `on_tick_end(tick, TickStats)` — natural spot in
      `World::step`/`step_parallel`'s entry/exit.
    - `on_agent_command(EntityCommand)` — natural spot in
@@ -120,7 +121,7 @@ candidate, adjust if a different choice is made).**
    directly). Recommend (b) — a convention nobody enforces will get violated.
 5. **Test the boundary itself.** Before any real hook ships, a
    `test_scripted_determinism` test mirroring `test_determinism`
-   (`tests/simulation_tests.cpp`): two identical worlds, one with a script hook
+   (`tests/WorldRenderingTests.cpp`): two identical worlds, one with a script hook
    attached that does something (paints a material, say), stepped in lockstep,
    asserting equal `state_hash()` every tick — proving the scripting layer doesn't
    quietly break the contract everything else in this engine is built on.

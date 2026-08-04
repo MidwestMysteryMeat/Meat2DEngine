@@ -390,7 +390,18 @@ if(MEAT2D_BUILD_CLI)
 endif()
 
 if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
-    add_executable(meat2d_tests tests/simulation_tests.cpp)
+    add_executable(meat2d_tests
+        tests/TestMain.cpp
+        tests/TestSupport.cpp
+        tests/CoreFoundationTests.cpp
+        tests/CoreContentTests.cpp
+        tests/NetworkProtocolTests.cpp
+        tests/NetworkDiscoveryTests.cpp
+        tests/NetworkSessionTests.cpp
+        tests/ToolsAssetTests.cpp
+        tests/SimulationWorldTests.cpp
+        tests/WorldRenderingTests.cpp
+        tests/PersistenceParallelTests.cpp)
     target_compile_features(meat2d_tests PRIVATE cxx_std_20)
     target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
     add_test(NAME meat2d_tests COMMAND meat2d_tests)
