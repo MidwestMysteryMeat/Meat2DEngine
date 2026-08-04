@@ -44,3 +44,25 @@ Armadillo/ensmallen/cereal dependencies should not become mandatory for a
 minimal game runtime. The planned exporter must record architecture, fixed-
 point scale, bounds, and a content hash before a model can be loaded by a
 server or replay.
+
+The environment side should follow the same separation used by game-agent
+toolkits: a bounded observation/action adapter inside the engine, an offline
+trainer, and a validated inference artifact at runtime. Unity's
+[ML-Agents Toolkit](https://github.com/Unity-Technologies/ml-agents) demonstrates
+multi-agent, imitation-learning, curriculum, randomization, and concurrent
+environment workflows; [UnrealMLAgents](https://github.com/AlanLaboratory/UnrealMLAgents)
+shows how that model can be adapted to an engine plugin. Meat2D's planned
+equivalent is a headless environment runner that emits observations and accepts
+validated commands, not a Python or GPU dependency in the authoritative tick.
+The smaller [CPP_Neural_Network](https://github.com/Krish120003/CPP_Neural_Network)
+project is a useful reference for supervised datasets, evaluation splits, and
+activation/loss experiments, but its floating-point training loop should remain
+offline rather than being copied into deterministic multiplayer simulation.
+
+Lua is a good optional authoring/training surface for projects that already use
+Lua gameplay scripts. [`luann`](https://github.com/wixico/luann) demonstrates a
+small train/save/load workflow, while [`LuaNet`](https://github.com/Maia-jp/LuaNet)
+demonstrates a beginner-friendly multilayer API and matrix helpers. Neither is
+treated as an authoritative runtime dependency: a future Lua integration must
+use the same sandbox, instruction budget, deterministic RNG, command-only
+mutation boundary, and validated model-export path as C++ agents.

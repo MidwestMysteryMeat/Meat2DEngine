@@ -850,6 +850,28 @@ void test_mcp_gateway_safety_and_discovery() {
               !gateway.execute("scene", "inspect", {}, "capability-token").success &&
               gateway.configure("scene", true, "capability-token", "write").success,
           "MCP gateway did not enforce bounded parameters and tool configuration");
+
+    meat2d::tools::McpGateway read_only(
+        editor, "read-token", static_cast<std::uint8_t>(meat2d::tools::McpCapability::ReadScene));
+    const auto inspected = read_only.execute("scene", "inspect", {}, "read-token", {}, 42U);
+    check(inspected.success && inspected.request_id == 42U &&
+              !read_only.execute("scene", "select", "entity=1", "read-token", "write", 43U)
+                   .success &&
+              read_only.execute("scene", "inspect", {}, "read-token", {}, 42U).code ==
+                  "invalid_request" &&
+              read_only.audit_log().size() == 3U,
+          "MCP gateway did not enforce scoped capabilities or correlated request IDs");
+
+    read_only.reset_session();
+    for (std::uint64_t request = 1U;
+         request <= meat2d::tools::McpGateway::maximum_requests_per_session; ++request) {
+        check(read_only.search({}, "read-token", request).success,
+              "MCP gateway rejected a request inside the session budget");
+    }
+    check(read_only.search({}, "read-token", 129U).code == "rate_limited" &&
+              read_only.requests_this_session() ==
+                  meat2d::tools::McpGateway::maximum_requests_per_session,
+          "MCP gateway did not enforce its bounded session request budget");
 }
 
 void test_input_state_and_action_map() {

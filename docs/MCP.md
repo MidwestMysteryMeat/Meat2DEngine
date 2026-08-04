@@ -29,7 +29,13 @@ untrusted JSON or executes arbitrary commands.
 
 - Tokens are compared without early-exit string comparison.
 - Empty capability tokens disable the gateway.
+- Read-scene, write-scene, and tool-configuration capabilities are separate
+  scopes.
 - Request parameters are capped at 256 bytes.
+- Requests carry a monotonically increasing numeric ID and receive the same ID
+  in the response; implicit IDs are only a compatibility fallback.
+- Each gateway session is capped at 128 accepted requests and keeps at most
+  128 bounded audit events. `reset_session()` starts a fresh budget.
 - Tool names and actions must be registered; unknown values are rejected.
 - Writes require both a valid capability token and explicit write consent.
 - Scene mutations use `SceneEditor`, so selection and history semantics remain
@@ -38,9 +44,8 @@ untrusted JSON or executes arbitrary commands.
   surface in the gateway.
 
 The next transport phase should add loopback-only Streamable HTTP and stdio
-adapters, per-session rate limits, request IDs, audit events, and opt-in
-capability scopes. Non-loopback listening must fail closed unless a token,
-rate limit, and TLS policy are explicitly configured.
+adapters that preserve these limits. Non-loopback listening must fail closed
+unless a token, rate limit, and TLS policy are explicitly configured.
 
 ## Design references
 

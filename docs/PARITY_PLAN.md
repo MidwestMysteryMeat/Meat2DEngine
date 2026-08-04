@@ -156,7 +156,8 @@ Status: planned
       reward state.
 - [x] Stable-ID deterministic crowd steering with separation and bounds.
 - [x] Transport-neutral MCP gateway with capability-token authentication,
-      discovery, bounded scene reads, and consent-gated editor writes.
+      discovery, bounded scene reads, consent-gated editor writes, scoped
+      capabilities, request IDs, session budgets, and audit events.
 - [ ] Versioned C ABI for bindings.
 - [ ] Sandboxed Lua gameplay/mod API.
 - [ ] Deterministic RNG and command-only authoritative mutations.
@@ -207,6 +208,10 @@ Status: planned
 - [ ] Beginner tutorial and one-hour game guide.
 - [ ] AI crowd, neural-policy, and MCP tooling examples with threat-model and
       permission documentation.
+- [ ] Headless ML environment runner with bounded observations/actions,
+      dataset export, evaluation splits, and offline trainer adapters.
+- [ ] Optional Lua authoring/training package with sandboxed script execution,
+      model import/export, and no direct authority over World or Scene state.
 - [ ] Multiplayer, platformer, destructible-terrain, cellular-roguelite,
       sandbox-survival, RPG, and modding samples.
 - [ ] API reference, architecture diagrams, security policy, and contribution
