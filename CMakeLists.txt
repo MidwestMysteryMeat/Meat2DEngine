@@ -193,6 +193,9 @@ add_library(
     STATIC
     src/net/ChunkCodec.cpp
     src/net/Discovery.cpp
+    src/net/DiscoveryCodec.cpp
+    src/net/DiscoveryLan.cpp
+    src/net/DiscoveryDirectory.cpp
     src/net/Fragmentation.cpp
     src/net/PacketCodec.cpp
     src/net/Reliability.cpp
