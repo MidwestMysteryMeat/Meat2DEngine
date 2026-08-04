@@ -553,4 +553,3 @@ void test_animation_playback_and_camera_source() {
 }
 
 } // namespace meat2d_tests
-

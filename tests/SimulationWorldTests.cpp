@@ -458,4 +458,3 @@ void test_living_simulation_determinism() {
 }
 
 } // namespace meat2d_tests
-

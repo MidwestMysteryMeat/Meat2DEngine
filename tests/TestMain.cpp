@@ -78,4 +78,3 @@ int main() {
     std::cout << "MEAT2D TESTS PASS\n";
     return 0;
 }
-

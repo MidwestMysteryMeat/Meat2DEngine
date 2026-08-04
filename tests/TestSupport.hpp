@@ -75,8 +75,3 @@ void test_parallel_step_conserves_water_and_settles_sand();
 void test_parallel_step_records_dirty_regions();
 
 } // namespace meat2d_tests
-
-
-
-
-

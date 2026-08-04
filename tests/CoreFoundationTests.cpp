@@ -544,4 +544,3 @@ void test_scene_hierarchy_and_tags() {
 }
 
 } // namespace meat2d_tests
-

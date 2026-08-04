@@ -289,4 +289,3 @@ void test_texture_atlas_cache() {
 }
 
 } // namespace meat2d_tests
-

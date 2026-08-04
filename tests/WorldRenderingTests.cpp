@@ -322,4 +322,3 @@ void test_projectile_leaves_world_without_impact() {
 }
 
 } // namespace meat2d_tests
-
