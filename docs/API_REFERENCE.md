@@ -37,6 +37,8 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
   snapshots, and discovery.
 - `meat2d/tools/`: project/template, asset, and editor workflows.
 - `meat2d/ai/` and `meat2d/life/`: optional living simulation and agent systems.
+- `meat2d/c_api.h`: versioned exception-free C ABI for the bounded World subset;
+  see [C ABI](C_API.md).
 
 ## Compatibility rules
 

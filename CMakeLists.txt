@@ -51,6 +51,7 @@ set(MEAT2D_RUNTIME_TARGETS)
 add_library(
     meat2d_core
     STATIC
+    src/core/Capi.cpp
     src/assets/Animation.cpp
     src/assets/TileMap.cpp
     src/assets/SpriteSheet.cpp

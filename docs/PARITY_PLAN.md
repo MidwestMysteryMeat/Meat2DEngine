@@ -166,7 +166,8 @@ Status: planned
 - [x] Transport-neutral MCP gateway with capability-token authentication,
       discovery, bounded scene reads, consent-gated editor writes, scoped
       capabilities, request IDs, session budgets, and audit events.
-- [ ] Versioned C ABI for bindings.
+- [x] First versioned exception-free C ABI for the bounded World subset;
+      scenes, networking, and scripting remain follow-on surfaces.
 - [ ] Sandboxed Lua gameplay/mod API.
 - [ ] Deterministic RNG and command-only authoritative mutations.
 - [ ] Script budgets, serialization, replay tests, and API documentation.

@@ -1,4 +1,5 @@
 #include "meat2d/ai/LivingSimulation.hpp"
+#include "meat2d/c_api.h"
 #include "meat2d/ai/Crowd.hpp"
 #include "meat2d/ai/LearningAgent.hpp"
 #include "meat2d/ai/LearningEnvironment.hpp"
@@ -63,6 +64,39 @@ void test_cell_layout_and_protocol() {
           "authoritative organism cell must remain eight bytes");
     check(sizeof(meat2d::net::PacketHeader) == 28, "network header layout unexpectedly changed");
     check(meat2d::net::maximum_players == 8, "first multiplayer target must remain eight players");
+}
+
+void test_c_api_world_surface() {
+    check(meat2d_c_api_version() == MEAT2D_C_API_VERSION,
+          "C ABI reported an unexpected version");
+    check(meat2d_world_create(0, 32, 1, 30) == nullptr,
+          "C ABI accepted an invalid world dimension");
+    auto* world = meat2d_world_create(32, 24, 123, 30);
+    check(world != nullptr, "C ABI could not create a valid world");
+    if (world == nullptr) {
+        return;
+    }
+    std::int32_t width = 0;
+    std::int32_t height = 0;
+    check(meat2d_world_get_dimensions(world, &width, &height) == MEAT2D_STATUS_OK &&
+              width == 32 && height == 24,
+          "C ABI returned incorrect dimensions");
+    check(meat2d_world_set_material(world, 4, 5, 3) == MEAT2D_STATUS_OK,
+          "C ABI could not set a valid material");
+    std::uint8_t material = 0;
+    check(meat2d_world_get_material(world, 4, 5, &material) == MEAT2D_STATUS_OK && material == 3,
+          "C ABI could not read a material it wrote");
+    check(meat2d_world_set_material(world, 4, 5, 255) == MEAT2D_STATUS_INVALID_MATERIAL,
+          "C ABI accepted an invalid material");
+    check(meat2d_world_get_material(world, 32, 0, &material) == MEAT2D_STATUS_OUT_OF_BOUNDS,
+          "C ABI accepted an out-of-bounds read");
+    meat2d_tick_stats stats{};
+    check(meat2d_world_step(world, &stats) == MEAT2D_STATUS_OK && stats.tick == 1,
+          "C ABI could not step the world");
+    std::vector<std::uint8_t> pixels(32U * 24U * 4U);
+    check(meat2d_world_rasterize_rgba(world, pixels.data(), pixels.size()) == MEAT2D_STATUS_OK,
+          "C ABI could not rasterize the world");
+    meat2d_world_destroy(world);
 }
 
 void test_fixed_timestep_accumulator() {
