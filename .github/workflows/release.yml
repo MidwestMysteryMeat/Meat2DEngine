@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for a manually triggered package"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+
+jobs:
+  package:
+    name: Package (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: windows-x86_64
+            runner: windows-2022
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure release SDK
+        shell: bash
+        run: >-
+          cmake -S . -B build/release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DMEAT2D_BUILD_CLIENT=OFF
+          -DMEAT2D_BUILD_LAUNCHER=OFF
+          -DMEAT2D_BUILD_EXAMPLES=OFF
+          -DMEAT2D_BUILD_TESTS=ON
+          -DMEAT2D_BUILD_BENCHMARKS=OFF
+
+      - name: Build release SDK
+        shell: bash
+        run: cmake --build build/release --parallel
+
+      - name: Test release SDK
+        shell: bash
+        run: ctest --test-dir build/release --output-on-failure
+
+      - name: Install and validate package consumer
+        shell: bash
+        run: |
+          cmake --install build/release --prefix "$RUNNER_TEMP/meat2d-install"
+          cmake -S tests/package_consumer -B "$RUNNER_TEMP/meat2d-consumer" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/meat2d-install"
+          cmake --build "$RUNNER_TEMP/meat2d-consumer" --parallel
+
+      - name: Create CPack archives
+        shell: bash
+        run: cmake --build build/release --target package
+
+      - name: Generate checksums and SBOM
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: >-
+          python tools/release_metadata.py
+          --version "${RELEASE_VERSION#v}"
+          --platform "${{ matrix.platform }}"
+          --package-dir build/release
+          --output-dir build/release/metadata
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meat2D-${{ matrix.platform }}
+          path: |
+            build/release/*.zip
+            build/release/*.tar.gz
+            build/release/metadata/*
+
+  api-docs:
+    name: Generate API documentation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install documentation tools
+        run: sudo apt-get update && sudo apt-get install --yes doxygen
+
+      - name: Set documentation version
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: sed -i "s/^PROJECT_NUMBER.*/PROJECT_NUMBER         = ${RELEASE_VERSION#v}/" docs/Doxyfile
+
+      - name: Generate Doxygen site
+        run: doxygen docs/Doxyfile
+
+      - name: Archive API documentation
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: tar -czf "Meat2D-${RELEASE_VERSION#v}-api-docs.tar.gz" -C docs/api html xml
+
+      - name: Upload API documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meat2D-api-docs
+          path: Meat2D-*-api-docs.tar.gz
+
+  publish:
+    name: Publish GitHub release
+    needs: [package, api-docs]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release and assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --generate-notes \
+            --verify-tag

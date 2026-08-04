@@ -243,6 +243,11 @@ target_link_libraries(your_game PRIVATE Meat2D::Core) # simulation only
 
 Tagged releases will replace `main` as the recommended `GIT_TAG`.
 
+Release archives include the installed SDK, CMake package metadata, a
+SHA-256 checksum manifest, and a CycloneDX software bill of materials. See
+[Releasing](docs/RELEASING.md) and [Migration notes](docs/MIGRATIONS.md) before
+pinning a release.
+
 The core can also be installed and consumed with `find_package`:
 
 ```bash

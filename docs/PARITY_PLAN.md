@@ -54,8 +54,8 @@ Status: **in progress**
       package installation, and package-consumer validation.
 - [x] Add fuzz targets for packet, fragmentation, replay, sprite metadata, and
       project-path parsing.
-- [ ] Add release tags, changelog, migration notes, generated API docs,
-      checksums, and an SBOM.
+- [x] Add release tags, changelog, migration notes, generated API docs, public
+      API reference, checksums, and an SBOM workflow.
 - [x] Correct product positioning and expose independent genre selectors.
 - [ ] Cover side-scroller/action-platformer, top-down/RTS, RPG, visual novel,
       destructible artillery, cellular roguelite, falling-sand, and

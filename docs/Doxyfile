@@ -1,0 +1,23 @@
+# Reproducible public-header documentation configuration.
+PROJECT_NAME           = Meat2D
+PROJECT_NUMBER         = 0.4.0
+PROJECT_BRIEF          = "C++20 2D game engine with deterministic simulation and multiplayer"
+OUTPUT_DIRECTORY       = docs/api
+OUTPUT_LANGUAGE        = English
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+EXTRACT_ALL            = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_NO_PARAMDOC       = NO
+QUIET                  = YES
+INPUT                  = include
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.h
+EXCLUDE_PATTERNS       = */detail/*
+FULL_PATH_NAMES        = NO
+STRIP_FROM_PATH        = include
+SOURCE_BROWSER         = NO
+HAVE_DOT               = NO
+HTML_TIMESTAMP         = NO
+GENERATE_TREEVIEW      = YES
