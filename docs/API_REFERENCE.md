@@ -41,6 +41,9 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
   see [C ABI](C_API.md).
 - `meat2d/compression/`: bounded raw/LZAV blocks with versioned envelopes,
   checksums, and decompression limits; see [Compression and packed assets](COMPRESSION_PLAN.md).
+- Encryption and key-management policy is documented separately in
+  [Encryption and key management](ENCRYPTION_PLAN.md); no cryptographic API is
+  enabled until its key-ownership and dependency review is complete.
 
 ## Compatibility rules
 

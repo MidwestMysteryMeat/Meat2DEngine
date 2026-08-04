@@ -14,6 +14,10 @@ texture, audio, or shader formats that already contain their own compression.
 PNG/JPEG/WebP, Ogg/Opus/MP3, archives, and encrypted data should normally be
 copied or stored without a second compression pass.
 
+When confidentiality is required, follow the separate
+[encryption and key-management plan](ENCRYPTION_PLAN.md): compress first,
+encrypt second, and authenticate the package metadata before parsing.
+
 ## Reference review
 
 ### LZAV — preferred candidate for evaluation
