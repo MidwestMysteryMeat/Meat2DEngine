@@ -119,7 +119,9 @@ range; incompatible handshakes are rejected before a client slot is allocated
 and counted in `ServerUpdateStats::incompatible_clients`. This is a compatibility
 gate, not protocol negotiation: incompatible clients should be upgraded or
 directed to a matching server build. The client build ID can be set before
-connecting with `AuthoritativeClient::set_build_id()`.
+connecting with `AuthoritativeClient::set_build_id()`. Rejected Hellos receive a
+bounded `Reject` response, so clients fail fast with the accepted range instead
+of waiting for a handshake timeout.
 
 The server also bounds work per update with `maximum_datagrams_per_update`,
 `maximum_inputs_per_update`, and `maximum_queued_inputs`. Invalid or

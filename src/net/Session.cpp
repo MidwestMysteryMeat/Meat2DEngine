@@ -288,11 +288,28 @@ void AuthoritativeServer::handle_unknown(const Endpoint& endpoint, const Packet&
     const auto id = allocate_client_id();
     if (!hello || id == 0U) {
         ++stats.invalid_datagrams;
+        send_rejection(endpoint,
+                       {
+                           .reason = hello ? RejectReason::ServerFull
+                                            : RejectReason::InvalidHello,
+                           .server_build_id = config_.build_id,
+                           .minimum_client_build_id = config_.minimum_client_build_id,
+                           .maximum_client_build_id = config_.maximum_client_build_id,
+                       },
+                       stats);
         return;
     }
     if (hello->build_id < config_.minimum_client_build_id ||
         hello->build_id > config_.maximum_client_build_id) {
         ++stats.incompatible_clients;
+        send_rejection(endpoint,
+                       {
+                           .reason = RejectReason::IncompatibleBuild,
+                           .server_build_id = config_.build_id,
+                           .minimum_client_build_id = config_.minimum_client_build_id,
+                           .maximum_client_build_id = config_.maximum_client_build_id,
+                       },
+                       stats);
         return;
     }
 
@@ -324,6 +341,16 @@ void AuthoritativeServer::handle_unknown(const Endpoint& endpoint, const Packet&
         .maximum_clients = config_.maximum_clients,
     });
     send_message(added, PacketType::Welcome, welcome, true, PacketFlagNone, stats);
+}
+
+void AuthoritativeServer::send_rejection(const Endpoint& endpoint, RejectMessage message,
+                                         ServerUpdateStats& stats) {
+    PacketHeader header{};
+    header.type = PacketType::Reject;
+    const auto datagram = encode_packet(header, encode_reject(message));
+    if (datagram && socket_.send(endpoint, *datagram)) {
+        ++stats.datagrams_sent;
+    }
 }
 
 void AuthoritativeServer::handle_client_packet(ClientSlot& client, const Packet& packet,

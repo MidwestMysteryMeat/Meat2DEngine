@@ -212,7 +212,7 @@ std::optional<Packet> decode_packet(std::span<const std::uint8_t> datagram) {
     }
 
     if (packet.header.magic != protocol_magic || packet.header.version != protocol_version ||
-        type > static_cast<std::uint8_t>(PacketType::SceneSnapshot) ||
+        type > static_cast<std::uint8_t>(PacketType::Reject) ||
         (packet.header.flags &
          static_cast<std::uint8_t>(~(PacketFlagReliable | PacketFlagFragment))) != 0U ||
         packet.header.reserved != 0U || packet.header.payload_bytes != reader.remaining()) {
@@ -243,6 +243,32 @@ std::optional<HelloMessage> decode_hello(std::span<const std::uint8_t> payload) 
         !reader.read_string(message.player_name, maximum_player_name_bytes) || !reader.empty()) {
         return std::nullopt;
     }
+    return message;
+}
+
+std::vector<std::uint8_t> encode_reject(const RejectMessage& message) {
+    ByteWriter writer;
+    writer.write_u8(static_cast<std::uint8_t>(message.reason));
+    writer.write_u32(message.server_build_id);
+    writer.write_u32(message.minimum_client_build_id);
+    writer.write_u32(message.maximum_client_build_id);
+    return writer.take();
+}
+
+std::optional<RejectMessage> decode_reject(std::span<const std::uint8_t> payload) {
+    RejectMessage message{};
+    ByteReader reader(payload);
+    std::uint8_t reason = 0;
+    if (!reader.read_u8(reason) || !reader.read_u32(message.server_build_id) ||
+        !reader.read_u32(message.minimum_client_build_id) ||
+        !reader.read_u32(message.maximum_client_build_id) || !reader.empty() ||
+        reason < static_cast<std::uint8_t>(RejectReason::InvalidHello) ||
+        reason > static_cast<std::uint8_t>(RejectReason::IncompatibleBuild) ||
+        message.server_build_id == 0U || message.minimum_client_build_id == 0U ||
+        message.maximum_client_build_id < message.minimum_client_build_id) {
+        return std::nullopt;
+    }
+    message.reason = static_cast<RejectReason>(reason);
     return message;
 }
 

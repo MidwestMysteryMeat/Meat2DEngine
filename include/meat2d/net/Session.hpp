@@ -123,6 +123,8 @@ class AuthoritativeServer {
     [[nodiscard]] std::uint8_t allocate_client_id() const noexcept;
     void poll_datagrams(ServerUpdateStats& stats);
     void handle_unknown(const Endpoint& endpoint, const Packet& packet, ServerUpdateStats& stats);
+    void send_rejection(const Endpoint& endpoint, RejectMessage message,
+                        ServerUpdateStats& stats);
     void handle_client_packet(ClientSlot& client, const Packet& packet, ServerUpdateStats& stats);
     void record_security_rejection(ClientSlot& client, ServerUpdateStats& stats) noexcept;
     void apply_inputs(ServerUpdateStats& stats);

@@ -157,6 +157,17 @@ void test_packet_codec() {
     }));
     check(!oversized_welcome.has_value(),
           "welcome message could request an unsafe client allocation");
+
+    const auto rejected = meat2d::net::decode_reject(meat2d::net::encode_reject({
+        .reason = meat2d::net::RejectReason::IncompatibleBuild,
+        .server_build_id = 9,
+        .minimum_client_build_id = 7,
+        .maximum_client_build_id = 9,
+    }));
+    check(rejected && rejected->reason == meat2d::net::RejectReason::IncompatibleBuild &&
+              rejected->minimum_client_build_id == 7U &&
+              rejected->maximum_client_build_id == 9U,
+          "rejection message changed during serialization");
 }
 
 void test_reliable_sequence_window() {

@@ -101,6 +101,19 @@ struct SnapshotMessage {
     std::uint16_t active_chunks{};
 };
 
+enum class RejectReason : std::uint8_t {
+    InvalidHello = 1,
+    ServerFull = 2,
+    IncompatibleBuild = 3
+};
+
+struct RejectMessage {
+    RejectReason reason{RejectReason::InvalidHello};
+    std::uint32_t server_build_id{1};
+    std::uint32_t minimum_client_build_id{1};
+    std::uint32_t maximum_client_build_id{1};
+};
+
 struct SceneSnapshotMessage {
     std::uint64_t state_hash{};
     std::vector<std::uint8_t> bytes;
@@ -115,6 +128,9 @@ struct SceneSnapshotMessage {
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> encode_hello(
     const HelloMessage& message);
 [[nodiscard]] std::optional<HelloMessage> decode_hello(
+    std::span<const std::uint8_t> payload);
+[[nodiscard]] std::vector<std::uint8_t> encode_reject(const RejectMessage& message);
+[[nodiscard]] std::optional<RejectMessage> decode_reject(
     std::span<const std::uint8_t> payload);
 [[nodiscard]] std::vector<std::uint8_t> encode_welcome(const WelcomeMessage& message);
 [[nodiscard]] std::optional<WelcomeMessage> decode_welcome(

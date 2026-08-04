@@ -514,6 +514,23 @@ void AuthoritativeClient::handle_packet(const Packet& packet, ClientUpdateStats&
         last_error_ = "server disconnected";
         socket_.close();
         break;
+    case PacketType::Reject: {
+        const auto message = decode_reject(packet.payload);
+        state_ = ClientConnectionState::Rejected;
+        if (!message) {
+            last_error_ = "server rejected the connection with an invalid reason";
+        } else if (message->reason == RejectReason::IncompatibleBuild) {
+            last_error_ = "server requires client build " +
+                          std::to_string(message->minimum_client_build_id) + "-" +
+                          std::to_string(message->maximum_client_build_id);
+        } else if (message->reason == RejectReason::ServerFull) {
+            last_error_ = "server is full";
+        } else {
+            last_error_ = "server rejected the hello";
+        }
+        socket_.close();
+        break;
+    }
     case PacketType::Hello:
     case PacketType::Input:
     case PacketType::Acknowledgement:

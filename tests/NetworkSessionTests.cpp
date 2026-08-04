@@ -339,9 +339,12 @@ void test_incompatible_client_build_is_rejected() {
           "server did not report the incompatible client build");
     check(server.client_count() == 0U,
           "incompatible client was allocated an authoritative session slot");
-    check(client.state() == meat2d::net::ClientConnectionState::Connecting,
-          "incompatible client did not remain outside the connected state");
     check(!client.set_build_id(8), "client allowed its build ID to change while connecting");
+    client.update();
+    check(client.state() == meat2d::net::ClientConnectionState::Rejected,
+          "incompatible client did not receive a rejected state");
+    check(client.last_error().find("client build 7-9") != std::string_view::npos,
+          "incompatible client did not receive the accepted build range");
     client.disconnect();
 }
 
