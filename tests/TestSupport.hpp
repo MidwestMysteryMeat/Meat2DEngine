@@ -70,6 +70,7 @@ void test_replay_round_trip_and_divergence();
 void test_replay_decode_sorts_out_of_order_paint_events();
 void test_chunk_store_persistence_across_worlds();
 void test_world_snapshot_round_trip_and_bounds();
+void test_session_snapshot_composition_and_hashes();
 void test_parallel_step_deterministic_across_thread_counts();
 void test_parallel_step_reproducible_across_runs();
 void test_parallel_step_conserves_water_and_settles_sand();

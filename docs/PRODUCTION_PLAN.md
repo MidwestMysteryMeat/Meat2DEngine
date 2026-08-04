@@ -145,7 +145,8 @@ upgrade a sample on every supported platform.
 2. Define and implement the first versioned session-state envelope by
    composing the world snapshot, scene serialization, and subsystem metadata
    codecs without claiming that every subsystem is persisted before its codec
-   exists.
+   exists. (World + scene + session ID are implemented; agents, projectiles,
+   scripts, and transport state remain.)
 3. Add authoritative command recording hooks to replay.
 4. Add security/replication acceptance tests before introducing encryption or
    relay complexity.

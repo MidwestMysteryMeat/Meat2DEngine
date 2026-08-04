@@ -77,6 +77,7 @@ add_library(
     src/sim/Material.cpp
     src/sim/Projectile.cpp
     src/sim/Scenario.cpp
+    src/sim/SessionSnapshot.cpp
     src/sim/World.cpp
     src/sim/WorldSnapshot.cpp
     src/sim/WorldGrid.cpp

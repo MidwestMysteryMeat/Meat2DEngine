@@ -34,6 +34,7 @@
 #include "meat2d/sim/Projectile.hpp"
 #include "meat2d/sim/Scenario.hpp"
 #include "meat2d/sim/World.hpp"
+#include "meat2d/sim/SessionSnapshot.hpp"
 #include "meat2d/sim/WorldSnapshot.hpp"
 #include "meat2d/tools/ProjectBrowser.hpp"
 #include "meat2d/tools/ProjectManager.hpp"
@@ -294,6 +295,43 @@ void test_world_snapshot_round_trip_and_bounds() {
     unknown_version[4] = 0xFFU;
     check(!meat2d::persistence::decode_world(unknown_version),
           "world snapshot accepted an unknown format version");
+}
+
+void test_session_snapshot_composition_and_hashes() {
+    meat2d::World world({
+        .width = 80,
+        .height = 72,
+        .seed = 8080,
+        .sleep_after_ticks = 11,
+    });
+    meat2d::seed_sand_lab(world);
+    world.step();
+
+    meat2d::scene::Scene scene("session");
+    const auto entity = scene.create_entity("player");
+    check(entity != meat2d::scene::invalid_entity && scene.add_transform(entity, {{8, 9}, {1, 1}}) != nullptr,
+          "session snapshot test could not create its scene state");
+
+    const auto encoded = meat2d::persistence::encode_session(77U, world, scene);
+    check(!encoded.empty(), "session snapshot rejected valid world and scene state");
+    const auto restored = meat2d::persistence::decode_session(encoded);
+    check(restored.has_value(), "session snapshot did not decode its composed state");
+    if (restored) {
+        check(restored->session_id == 77U && restored->world.state_hash() == world.state_hash() &&
+                  restored->scene.state_hash() == scene.state_hash(),
+              "session snapshot did not preserve component hashes and session identity");
+    }
+
+    auto corrupt_hash = encoded;
+    corrupt_hash[22U] ^= 0x01U;
+    check(!meat2d::persistence::decode_session(corrupt_hash),
+          "session snapshot accepted a component hash mismatch");
+    auto truncated = encoded;
+    truncated.pop_back();
+    check(!meat2d::persistence::decode_session(truncated),
+          "session snapshot accepted truncated component data");
+    check(meat2d::persistence::encode_session(77U, world, scene, encoded.size() - 1U).empty(),
+          "session snapshot ignored its maximum byte bound");
 }
 
 void test_parallel_step_deterministic_across_thread_counts() {
