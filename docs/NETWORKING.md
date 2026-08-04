@@ -113,6 +113,14 @@ but it is not encryption or account authentication. Internet-facing games
 should add an authenticated encryption layer and identity service appropriate
 to their deployment.
 
+The Hello also carries a client build ID. A server accepts only IDs in its
+configured inclusive `minimum_client_build_id` to `maximum_client_build_id`
+range; incompatible handshakes are rejected before a client slot is allocated
+and counted in `ServerUpdateStats::incompatible_clients`. This is a compatibility
+gate, not protocol negotiation: incompatible clients should be upgraded or
+directed to a matching server build. The client build ID can be set before
+connecting with `AuthoritativeClient::set_build_id()`.
+
 The server also bounds work per update with `maximum_datagrams_per_update`,
 `maximum_inputs_per_update`, and `maximum_queued_inputs`. Invalid or
 unauthorized client packets consume a rolling per-client security budget

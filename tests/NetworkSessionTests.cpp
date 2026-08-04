@@ -302,4 +302,47 @@ void test_security_budget_disconnects_abusive_client() {
     client.disconnect();
 }
 
+void test_incompatible_client_build_is_rejected() {
+    meat2d::net::AuthoritativeServer server({
+        .world =
+            {
+                .width = 64,
+                .height = 64,
+                .seed = 94,
+                .sleep_after_ticks = 30,
+            },
+        .port = 0,
+        .maximum_clients = 1,
+        .client_timeout_updates = 100,
+        .public_directory = std::nullopt,
+        .minimum_client_build_id = 7,
+        .maximum_client_build_id = 9,
+    });
+    check(server.start(), "build compatibility test server failed to start");
+    if (!server.running()) {
+        return;
+    }
+
+    meat2d::net::AuthoritativeClient client;
+    check(client.set_build_id(6), "client rejected a valid pre-connect build ID");
+    check(client.build_id() == 6U, "client did not retain its configured build ID");
+    check(client.connect(
+              {
+                  .address = "localhost",
+                  .port = server.port(),
+              },
+              "Incompatible Build Test", 0xB17D1U),
+          "incompatible build test client failed to start connecting");
+
+    const auto stats = server.update();
+    check(stats.incompatible_clients == 1U,
+          "server did not report the incompatible client build");
+    check(server.client_count() == 0U,
+          "incompatible client was allocated an authoritative session slot");
+    check(client.state() == meat2d::net::ClientConnectionState::Connecting,
+          "incompatible client did not remain outside the connected state");
+    check(!client.set_build_id(8), "client allowed its build ID to change while connecting");
+    client.disconnect();
+}
+
 } // namespace meat2d_tests

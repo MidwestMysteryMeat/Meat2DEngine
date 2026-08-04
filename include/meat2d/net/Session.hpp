@@ -47,6 +47,8 @@ struct ServerConfig {
     std::uint16_t maximum_invalid_datagrams_per_client{64};
     std::uint32_t security_window_updates{60};
     std::size_t maximum_queued_inputs{1'024};
+    std::uint32_t minimum_client_build_id{1};
+    std::uint32_t maximum_client_build_id{1};
 };
 
 struct ServerUpdateStats {
@@ -65,6 +67,7 @@ struct ServerUpdateStats {
     std::uint32_t security_rejections{};
     std::uint32_t security_disconnects{};
     std::uint32_t input_queue_overflows{};
+    std::uint32_t incompatible_clients{};
 };
 
 class AuthoritativeServer {
@@ -178,6 +181,8 @@ class AuthoritativeClient {
     bool connect(Endpoint server, std::string player_name, std::uint64_t nonce = 0);
     bool connect_via_directory(Endpoint directory, std::uint64_t server_id, std::string player_name,
                                std::uint64_t nonce = 0);
+    [[nodiscard]] bool set_build_id(std::uint32_t build_id) noexcept;
+    [[nodiscard]] std::uint32_t build_id() const noexcept;
     void disconnect();
     ClientUpdateStats update();
     bool send_input(InputMessage input);

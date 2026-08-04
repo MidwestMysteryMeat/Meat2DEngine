@@ -43,6 +43,7 @@ void test_public_browser_distrusts_directory_results();
 void test_authoritative_client_server_session();
 void test_prediction_and_reconciliation();
 void test_security_budget_disconnects_abusive_client();
+void test_incompatible_client_build_is_rejected();
 void test_project_browser_safety_and_editing();
 void test_project_manager_validation_and_templates();
 void test_sprite_sheet_metadata();

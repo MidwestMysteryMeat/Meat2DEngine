@@ -92,6 +92,18 @@ bool AuthoritativeClient::connect_via_directory(Endpoint directory, std::uint64_
     return true;
 }
 
+bool AuthoritativeClient::set_build_id(std::uint32_t build_id) noexcept {
+    if (build_id == 0U || socket_.valid()) {
+        return false;
+    }
+    build_id_ = build_id;
+    return true;
+}
+
+std::uint32_t AuthoritativeClient::build_id() const noexcept {
+    return build_id_;
+}
+
 bool AuthoritativeClient::begin_connection(std::string player_name, std::uint64_t nonce) {
     disconnect();
     if (!socket_.open()) {

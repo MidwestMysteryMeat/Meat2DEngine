@@ -69,6 +69,10 @@ AuthoritativeServer::AuthoritativeServer(ServerConfig config)
     config_.security_window_updates = std::max<std::uint32_t>(1U, config_.security_window_updates);
     config_.maximum_queued_inputs =
         std::clamp<std::size_t>(config_.maximum_queued_inputs, 1U, 16'384U);
+    config_.build_id = std::max<std::uint32_t>(1U, config_.build_id);
+    config_.minimum_client_build_id = std::max<std::uint32_t>(1U, config_.minimum_client_build_id);
+    config_.maximum_client_build_id = std::max<std::uint32_t>(
+        config_.minimum_client_build_id, config_.maximum_client_build_id);
     clients_.reserve(config_.maximum_clients);
     inputs_.reserve(256);
 }
@@ -284,6 +288,11 @@ void AuthoritativeServer::handle_unknown(const Endpoint& endpoint, const Packet&
     const auto id = allocate_client_id();
     if (!hello || id == 0U) {
         ++stats.invalid_datagrams;
+        return;
+    }
+    if (hello->build_id < config_.minimum_client_build_id ||
+        hello->build_id > config_.maximum_client_build_id) {
+        ++stats.incompatible_clients;
         return;
     }
 

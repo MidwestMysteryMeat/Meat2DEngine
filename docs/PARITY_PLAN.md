@@ -188,6 +188,8 @@ Status: planned
 - [ ] Late join, baseline snapshots, reconnection, and session resume.
 - [ ] Entity interest management, interpolation, and lag simulation.
 - [ ] Authenticated/encrypted sessions and protocol version negotiation.
+- [x] Configurable client-build compatibility range with pre-slot rejection and
+      handshake diagnostics; full version negotiation remains.
 - [x] Bounded datagram/input/invalid-packet budgets with security rejection and
       disconnect diagnostics.
 - [ ] Authentication, encryption, broader rate-limit policy, and production
