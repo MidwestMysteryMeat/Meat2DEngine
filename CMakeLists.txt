@@ -52,6 +52,7 @@ add_library(
     src/ai/LearningEnvironment.cpp
     src/ai/LearningAgent.cpp
     src/ai/LivingSimulation.cpp
+    src/ai/LivingSimulationAgents.cpp
     src/ai/NeuralNetwork.cpp
     src/input/Input.cpp
     src/life/OrganismField.cpp
