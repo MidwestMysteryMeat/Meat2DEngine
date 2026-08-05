@@ -24,6 +24,11 @@ are the actual release criteria.
 Current assessment: Foundation-ready, approaching Early-production for scoped
 games, not Parity-ready.
 
+The five-track execution rubric and 8+/10 exit evidence are maintained in
+[Production 8+ execution plan](PRODUCTION_8_PLUS_PLAN.md). The current scores
+remain deliberately below the target until their reliability, security,
+performance, documentation, and acceptance gates are demonstrated.
+
 ## Phase status snapshot
 
 - Phase 0 — SDK foundation: **100%**

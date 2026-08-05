@@ -10,6 +10,9 @@ The project is intentionally early. Its first working slice combines a
 deterministic world runtime, authoritative multiplayer, a graphical project
 editor, selectable game-type starters, and one-command packaging.
 
+Production status and the acceptance gates for bringing all five major tracks
+to 8+/10 are documented in [Production 8+ execution plan](docs/PRODUCTION_8_PLUS_PLAN.md).
+
 | Interactive sandbox (elements lab) | `examples/deep_dig` |
 | --- | --- |
 | ![Sand, water, and steam settling in the sandbox's elements lab](docs/screenshots/sandbox_elements_lab.png) | ![Deep Dig's mineshaft, HUD, and vault chamber](docs/screenshots/deep_dig.png) |

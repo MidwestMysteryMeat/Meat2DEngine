@@ -1,5 +1,9 @@
 # Meat2D parity plan
 
+The measurable 8+/10 delivery gates for runtime, editor, multiplayer,
+persistence/replay, and packaging/security are tracked in
+[Production 8+ execution plan](PRODUCTION_8_PLUS_PLAN.md).
+
 ## Objective
 
 Meat2D is intended to become a general-purpose C++20-first 2D engine for

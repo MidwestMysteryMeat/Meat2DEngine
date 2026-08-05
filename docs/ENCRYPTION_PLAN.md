@@ -139,7 +139,9 @@ has succeeded.
 
 ### Encryption 2 — packages and saves
 
-- [ ] Encrypt only explicitly classified private entries after compression.
+- [x] Encrypt only explicitly classified private entries after compression in
+      the initial deterministic asset-pack API; classification policy remains
+      the caller's responsibility.
 - [ ] Sign manifests and verify publisher identity before package use.
 - [ ] Add key rotation, migration, rollback, and interrupted-write handling.
 
