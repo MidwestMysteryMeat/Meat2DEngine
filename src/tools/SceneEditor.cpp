@@ -81,7 +81,11 @@ std::vector<scene::EntityId> SceneEditor::children_of(scene::EntityId parent) co
 }
 
 bool SceneEditor::apply_override(const scene::SceneOverride& scene_override) {
-    if (!history_.scene().apply_override(scene_override) || !history_.checkpoint()) {
+    return apply_overrides(std::span<const scene::SceneOverride>(&scene_override, 1U));
+}
+
+bool SceneEditor::apply_overrides(std::span<const scene::SceneOverride> scene_overrides) {
+    if (!history_.scene().apply_overrides(scene_overrides) || !history_.checkpoint()) {
         return false;
     }
     if (selected_ && !scene().contains(*selected_)) {

@@ -42,7 +42,9 @@ smallest target set that satisfies an application; `Meat2D::Net`,
   backend-neutral state.
 - `meat2d/net/`: wire protocol, packet validation, sessions, replay-safe
   snapshots, and discovery.
-- `meat2d/tools/`: project/template, asset, and editor workflows.
+- `meat2d/tools/`: project/template, asset, and editor workflows. The
+  backend-neutral `SceneEditor` supports deterministic selection and atomic
+  batch scene overrides as one bounded undo step.
 - `meat2d/ai/` and `meat2d/life/`: optional living simulation and agent systems.
 - `meat2d/c_api.h`: versioned exception-free C ABI for the bounded World subset;
   see [C ABI](C_API.md).

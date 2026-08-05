@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace meat2d::tools {
@@ -32,6 +33,7 @@ class SceneEditor {
         scene::EntityId parent = scene::invalid_entity) const;
 
     bool apply_override(const scene::SceneOverride& scene_override);
+    bool apply_overrides(std::span<const scene::SceneOverride> scene_overrides);
     bool undo();
     bool redo();
 

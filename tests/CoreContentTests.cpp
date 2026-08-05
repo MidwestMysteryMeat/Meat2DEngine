@@ -292,6 +292,18 @@ void test_scene_editor_model() {
               editor.scene().find(front)->name == "Front" && editor.redo() &&
               editor.scene().find(front)->name == "Selected Front" && editor.selected() == front,
           "scene editor override history did not undo and redo selection edits");
+    meat2d::scene::SceneOverride parent_enabled{};
+    parent_enabled.entity = parent;
+    parent_enabled.enabled = false;
+    meat2d::scene::SceneOverride back_renamed{};
+    back_renamed.entity = back;
+    back_renamed.name = "Edited Back";
+    const std::array batch_overrides{parent_enabled, back_renamed};
+    check(editor.apply_overrides(batch_overrides) && !editor.scene().find(parent)->enabled &&
+              editor.scene().find(back)->name == "Edited Back" &&
+              editor.history().undo_count() == 2U && editor.undo() &&
+              editor.scene().find(parent)->enabled && editor.scene().find(back)->name == "Back",
+          "scene editor batch overrides were not atomic or one-step undoable");
     check(!editor.select(999U), "scene editor selected an unknown entity");
 }
 
