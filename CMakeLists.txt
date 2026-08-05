@@ -164,6 +164,7 @@ add_library(
     src/render/Particles.cpp
     src/render/StaticMeshBatch.cpp
     src/render/SpriteBatch.cpp
+    src/render/Ui.cpp
     src/render/WorldView.cpp
 )
 
@@ -464,6 +465,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
         tests/CompressionTests.cpp
         tests/CryptoTests.cpp
         tests/AssetPackTests.cpp
+        tests/UiTests.cpp
         tests/CoreFoundationTests.cpp
         tests/CoreContentTests.cpp
         tests/NetworkProtocolTests.cpp

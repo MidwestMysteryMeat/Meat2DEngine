@@ -130,7 +130,11 @@ Status: planned
 - [x] Keyboard, mouse, gamepad, and touch input state with action maps and
       rebinding; platform event adapters remain separate.
 - [ ] Audio playback, music, mixing, and spatial audio.
-- [ ] Runtime UI and debug console.
+- [x] Initial bounded backend-neutral runtime UI context with deterministic
+      focus, navigation, pointer activation, checkbox events, vertical layout,
+      and renderer-facing draw commands.
+- [ ] Full runtime UI: clipping, text/font services, accessibility defaults,
+      styling, debug console, and platform/renderer adapters.
 - [x] Initial renderer-neutral tilemap layers, atlas metadata, solid-cell
       queries, deterministic hashing, and versioned serialization.
 - [ ] Optional Box2D-backed rigid-body physics while preserving the deterministic

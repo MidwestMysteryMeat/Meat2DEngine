@@ -27,8 +27,10 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
 - `meat2d/persistence`: bounded composition of world snapshots and versioned
   scene documents with component hash verification. Agent, projectile, script,
   and transport persistence are separate follow-on codecs.
-- `meat2d/render/`: camera and render data extraction. It does not require an
-  SDL window in headless builds.
+- `meat2d/render/`: camera and render data extraction plus a backend-neutral
+  bounded UI context. `meat2d::ui::Context` owns widget layout, focus and
+  navigation, pointer activation, checkbox state, events, and draw commands;
+  it does not require an SDL window in headless builds.
 - `meat2d/input/`: bounded keyboard, mouse, gamepad, and touch state with
   deterministic frame edges, deltas, and action-map bindings. SDL or another
   platform event source is responsible for translating native events into this
