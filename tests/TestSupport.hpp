@@ -12,6 +12,7 @@ void test_compression_blocks();
 void test_crypto_blocks();
 void test_asset_packs();
 void test_ui_context();
+void test_audio_mixer();
 void test_c_api_world_surface();
 void test_fixed_timestep_accumulator();
 void test_deterministic_rng();

@@ -57,8 +57,8 @@ to 8+/10 are documented in [Production 8+ execution plan](docs/PRODUCTION_8_PLUS
 - Same-machine/direct joins, automatic LAN discovery, public server listings,
   and directory-assisted UDP hole punching
 - Self-hostable `meat2d_directory` service; gameplay remains peer-to-server
-- Installable `Meat2D::Core`, `Meat2D::Net`, and `Meat2D::Tools` CMake
-  targets and CPack SDK archives
+- Installable `Meat2D::Core`, `Meat2D::Render`, `Meat2D::Audio`,
+  `Meat2D::Net`, and `Meat2D::Tools` CMake targets and CPack SDK archives
 - General scene runtime with stable entity IDs, transform/sprite/collider
   components, deterministic hashing, and versioned scene serialization
 - Backend-neutral keyboard/mouse input state, action bindings, integer camera
@@ -246,6 +246,7 @@ FetchContent_MakeAvailable(Meat2D)
 
 target_link_libraries(your_game PRIVATE Meat2D::Core) # simulation only
 # target_link_libraries(your_game PRIVATE Meat2D::Render) # WorldView dirty-region rasterization
+# target_link_libraries(your_game PRIVATE Meat2D::Audio) # backend-neutral audio commands
 # target_link_libraries(your_game PRIVATE Meat2D::Net) # simulation + networking
 ```
 

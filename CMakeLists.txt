@@ -209,6 +209,42 @@ else()
 endif()
 
 add_library(
+    meat2d_audio
+    STATIC
+    src/audio/Audio.cpp
+)
+add_library(Meat2D::Audio ALIAS meat2d_audio)
+set_target_properties(meat2d_audio PROPERTIES EXPORT_NAME Audio)
+target_compile_features(meat2d_audio PUBLIC cxx_std_20)
+target_include_directories(
+    meat2d_audio
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(meat2d_audio PUBLIC Meat2D::Core)
+
+if(MSVC)
+    target_compile_options(meat2d_audio PRIVATE /W4 /permissive- /Zc:__cplusplus)
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_audio PRIVATE /WX)
+    endif()
+else()
+    target_compile_options(
+        meat2d_audio
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wconversion
+            -Wshadow
+    )
+    if(MEAT2D_WARNINGS_AS_ERRORS)
+        target_compile_options(meat2d_audio PRIVATE -Werror)
+    endif()
+endif()
+
+add_library(
     meat2d_tools
     STATIC
     src/tools/AssetPack.cpp
@@ -466,6 +502,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
         tests/CryptoTests.cpp
         tests/AssetPackTests.cpp
         tests/UiTests.cpp
+        tests/AudioTests.cpp
         tests/CoreFoundationTests.cpp
         tests/CoreContentTests.cpp
         tests/NetworkProtocolTests.cpp
@@ -476,7 +513,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
         tests/WorldRenderingTests.cpp
         tests/PersistenceParallelTests.cpp)
     target_compile_features(meat2d_tests PRIVATE cxx_std_20)
-    target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Tools)
+    target_link_libraries(meat2d_tests PRIVATE Meat2D::Net Meat2D::Render Meat2D::Audio Meat2D::Tools)
     if(MEAT2D_ENABLE_LZAV)
         target_compile_definitions(meat2d_tests PRIVATE MEAT2D_TEST_HAS_LZAV=1)
     endif()
@@ -547,6 +584,7 @@ if(MEAT2D_SANITIZER)
     foreach(candidate IN ITEMS
         meat2d_core
         meat2d_render
+        meat2d_audio
         meat2d_tools
         meat2d_net
         meat2d_imgui
@@ -585,6 +623,7 @@ if(MEAT2D_COVERAGE)
     foreach(candidate IN ITEMS
         meat2d_core
         meat2d_render
+        meat2d_audio
         meat2d_tools
         meat2d_net
         meat2d_tests)
@@ -608,7 +647,7 @@ endif()
 
 if(MEAT2D_ENABLE_INSTALL)
     install(
-        TARGETS meat2d_core meat2d_net meat2d_render meat2d_tools
+        TARGETS meat2d_core meat2d_net meat2d_render meat2d_audio meat2d_tools
         EXPORT Meat2DTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

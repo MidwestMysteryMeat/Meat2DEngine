@@ -130,6 +130,10 @@ Status: planned
 - [x] Keyboard, mouse, gamepad, and touch input state with action maps and
       rebinding; platform event adapters remain separate.
 - [ ] Audio playback, music, mixing, and spatial audio.
+- [x] Backend-neutral bounded audio clip metadata, named buses, validated play
+      options, deterministic command sequencing, and device-reset signaling.
+- [ ] Device/decoder adapters, streaming buffers, spatialization, music
+      transitions, and device-loss recovery implementation.
 - [x] Initial bounded backend-neutral runtime UI context with deterministic
       focus, navigation, pointer activation, checkbox events, vertical layout,
       and renderer-facing draw commands.

@@ -7,7 +7,7 @@ without relying on commit history.
 ## 0.3.x to 0.4.x
 
 - Use the exported CMake targets `Meat2D::Core`, `Meat2D::Render`,
-  `Meat2D::Net`, and `Meat2D::Tools`. Do not link implementation libraries or
+  `Meat2D::Audio`, `Meat2D::Net`, and `Meat2D::Tools`. Do not link implementation libraries or
   include files from `src/`.
 - The engine is a general 2D runtime. Cellular/destructible simulation is an
   optional gameplay system; it is not required by conventional side-scrollers,

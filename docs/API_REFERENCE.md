@@ -9,12 +9,13 @@ Meat2D exposes a small set of installable CMake targets. Headers under
 | --- | --- | --- |
 | `Meat2D::Core` | entities, scenes, world simulation, materials, replay, persistence, and shared utilities | every game or tool using the runtime |
 | `Meat2D::Render` | camera, world-view dirty-region data, sprites, and render-facing components | graphical games and editors |
+| `Meat2D::Audio` | backend-neutral clip metadata, buses, bounded mixer commands, and device-reset signaling | graphical games and platform audio adapters |
 | `Meat2D::Net` | packets, reliable UDP, sessions, discovery, prediction, and snapshots | multiplayer games and dedicated servers |
 | `Meat2D::Tools` | projects, templates, assets, editor-facing management, and CLI support | launchers and project tools |
 
 The targets carry their include directories and C++20 requirement. Link the
-smallest target set that satisfies an application; `Meat2D::Net` already
-depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
+smallest target set that satisfies an application; `Meat2D::Net`,
+`Meat2D::Render`, and `Meat2D::Audio` depend on `Meat2D::Core`.
 
 ## API areas
 
@@ -31,6 +32,10 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
   bounded UI context. `meat2d::ui::Context` owns widget layout, focus and
   navigation, pointer activation, checkbox state, events, and draw commands;
   it does not require an SDL window in headless builds.
+- `meat2d/audio/`: bounded clip metadata, named buses, validated play options,
+  deterministic per-frame commands, and explicit device-reset signaling. This
+  target does not open a device or decode audio; platform adapters consume its
+  command stream.
 - `meat2d/input/`: bounded keyboard, mouse, gamepad, and touch state with
   deterministic frame edges, deltas, and action-map bindings. SDL or another
   platform event source is responsible for translating native events into this

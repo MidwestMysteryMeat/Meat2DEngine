@@ -43,6 +43,12 @@ These are conservative engineering estimates, not completed acceptance scores.
 - A backend-neutral audio resource/command layer exists with streaming music,
   sound effects, groups, volume, pause/resume, device-loss recovery, and a
   real desktop adapter.
+
+The first backend-neutral audio core is now available as `Meat2D::Audio`: it
+validates bounded clip metadata and play parameters, tracks named bus gains,
+emits deterministic bounded commands, and exposes an explicit device-reset
+command. Decoder/device adapters, streaming buffers, spatialization, and
+recovery evidence remain required for this gate.
 - Runtime UI provides layout, input focus, navigation, clipping, text, fonts,
   accessibility-safe defaults, and a bounded debug console.
 - Rendering has documented texture lifetime, atlas invalidation, font upload,

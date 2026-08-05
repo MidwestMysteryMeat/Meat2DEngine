@@ -9,6 +9,7 @@ int main() {
     test_crypto_blocks();
     test_asset_packs();
     test_ui_context();
+    test_audio_mixer();
     test_c_api_world_surface();
     test_fixed_timestep_accumulator();
     test_deterministic_rng();
