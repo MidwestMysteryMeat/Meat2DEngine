@@ -210,6 +210,7 @@ endif()
 add_library(
     meat2d_tools
     STATIC
+    src/tools/AssetPack.cpp
     src/tools/Process.cpp
     src/tools/ProjectBrowser.cpp
     src/tools/ProjectManager.cpp
@@ -462,6 +463,7 @@ if(MEAT2D_BUILD_TESTS AND BUILD_TESTING)
         tests/TestSupport.cpp
         tests/CompressionTests.cpp
         tests/CryptoTests.cpp
+        tests/AssetPackTests.cpp
         tests/CoreFoundationTests.cpp
         tests/CoreContentTests.cpp
         tests/NetworkProtocolTests.cpp

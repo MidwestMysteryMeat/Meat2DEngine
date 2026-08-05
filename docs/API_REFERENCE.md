@@ -47,6 +47,8 @@ depends on `Meat2D::Core`, and `Meat2D::Render` uses `Meat2D::Core`.
 - `meat2d/security/`: optional libsodium XChaCha20-Poly1305-IETF blocks with
   bounded authenticated encryption; enable with `MEAT2D_ENABLE_SODIUM` after
   supplying a reviewed libsodium installation.
+- `meat2d/tools/AssetPack.hpp`: deterministic normalized-path packs with
+  bounded compression and optional explicit per-entry encryption.
 
 ## Compatibility rules
 

@@ -83,8 +83,11 @@ simulation subsystem.
 
 ### Compression 1 — assets and package build
 
-- [ ] Add deterministic asset-pack output with sorted entries, per-entry hash,
-      codec metadata, alignment, and a manifest.
+- [x] Add the initial deterministic asset-pack output with sorted normalized
+      entries, bounded payloads, per-entry checksums, codec metadata, and
+      random-access reads.
+- [ ] Add explicit alignment, a signed manifest, package-level hashes, and
+      release migration metadata.
 - [ ] Compress text/data/scene/tile content and leave already-compressed media
       raw unless measurements prove otherwise.
 - [ ] Add editor cache invalidation by source hash and package consumer tests.

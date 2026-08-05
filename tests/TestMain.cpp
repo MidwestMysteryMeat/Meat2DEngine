@@ -7,6 +7,7 @@ int main() {
     test_cell_layout_and_protocol();
     test_compression_blocks();
     test_crypto_blocks();
+    test_asset_packs();
     test_c_api_world_surface();
     test_fixed_timestep_accumulator();
     test_deterministic_rng();
